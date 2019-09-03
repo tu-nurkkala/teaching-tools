@@ -1,0 +1,66 @@
+%%%% Package to configure minted and tcolorbox.
+
+% Fix multiple declaration of \framed
+% See https://tex.stackexchange.com/questions/71177/command-already-defined
+\makeatletter
+\expandafter\providecommand\expandafter*\csname ver@framed.sty\endcsname{}
+\makeatother
+
+% Package minted
+\usepackage{minted}
+\newminted{js}{frame=single,linenos,numberblanklines=false,autogobble}
+\newminted{sql}{frame=single,linenos,numberblanklines=false,autogobble}
+
+% Package tcolorbox
+\usepackage[minted,skins,breakable]{tcolorbox}
+\tcbset{
+  common-listing/.style={       % Common to all listings
+    colback=blue!5,
+    colframe=blue!50!black,
+    listing only,
+    title=\textsf{#1},
+    left=5mm,
+    enhanced,
+    overlay={
+      \begin{tcbclipinterior}
+        \fill[red!20!blue!20!white] (frame.south west)
+        rectangle ([xshift=5mm]frame.north west);
+      \end{tcbclipinterior}
+    }
+  },
+  minted-common/.style={        % Minted specific
+    common-listing,
+    listing engine=minted,
+    minted options={
+      breaklines,
+      linenos,
+      numbersep=3mm,
+      autogobble
+    }
+  },
+  minted-make/.style={          % Make specific
+    minted-common,
+    minted language=make,
+    minted options={
+      escapeinside=!!,
+      showtabs,
+      tab=\rightarrowfill
+    }
+  },
+  minted-c/.style={             % C specific
+    minted-common,
+    minted language=c
+  },
+  minted-sql/.style={           % C specific
+    minted-common,
+    minted language=sql
+  },
+  minted-js/.style={            % C specific
+    minted-common,
+    minted language=js
+  },
+  minted-cuda/.style={          % CUDA specific
+    minted-common,
+    minted language=cuda
+  }
+}
