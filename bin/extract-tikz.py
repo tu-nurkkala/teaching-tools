@@ -4,48 +4,53 @@ import fileinput
 import subprocess
 import os
 import argparse
+import re
 from os.path import basename, splitext
 from jinja2 import Environment, FileSystemLoader
+from enum import Enum
 
 
-class TikzConverter(object):
-    """Handle the conversion of ONE tikz picture."""
+class LaTeXConverter(object):
+    """Handle the conversion of ONE LaTex/TikZ picture."""
 
-    def __init__(self, org_file_name, org_lineno, picture_number, template_directory):
+    def __init__(self, org_file_name, org_lineno, picture_number, cmd_line_args):
         self.org_file_name = org_file_name
         self.org_file_base = splitext(basename(self.org_file_name))[0]
         self.org_lineno = org_lineno
         self.picture_number = picture_number
-        self.tikz_buffer = []
+        self.cmd_line_args = cmd_line_args
 
-        jinja_env = Environment(loader=FileSystemLoader(template_directory))
+        self.lines = []
+
+        jinja_env = Environment(
+            loader=FileSystemLoader(self.cmd_line_args.template_directory)
+        )
         self.template = jinja_env.get_template("tikz-template.tex.jinja")
 
         print(f"{self.org_file_name} line {self.org_lineno}")
 
     def append(self, line):
-        self.tikz_buffer.append(line)
+        self.lines.append(line)
 
     def make_file_name(self, suffix):
         base_name = f"{self.org_file_base}-pic-{self.picture_number}"
         return f"{base_name}.{suffix}"
 
     def wrap_buffer(self):
-        tmp_buffer = self.tikz_buffer[:]
-        tmp_buffer.insert(
-            0, f"% ----- START {self.org_file_name} l.{self.org_lineno} -----"
-        )
-        tmp_buffer.append(r"% ----- END -----")
-        return tmp_buffer
+        tmp = self.lines[:]
+        tmp.insert(0, f"% START {self.org_file_name} l.{self.org_lineno}")
+        tmp.append(r"% END")
+        return tmp
 
     def write_tikz_file(self):
         tikz = "\n".join(self.wrap_buffer())
         with open(self.make_file_name("tikz"), "w") as tikz_file:
             tikz_file.write(tikz)
 
-    def write_tex_file(self):
-        tikz = "\n".join(self.wrap_buffer())
-        latex = self.template.render(tikz=tikz)
+    def write_tex_file(self, extra_headers):
+        latex = self.template.render(
+            tikz="\n".join(self.wrap_buffer()), headers="\n".join(extra_headers)
+        )
 
         with open(self.make_file_name("tex"), "w") as tikz_file:
             tikz_file.write(latex)
@@ -77,50 +82,96 @@ class TikzConverter(object):
         for suffix in ["pdf", "log", "aux"]:
             os.remove(self.make_file_name(suffix))
 
+    def convert(self, extra_headers):
+        if self.cmd_line_args.make_tikz:
+            self.write_tikz_file()
+        self.write_tex_file(extra_headers)
+        if not self.cmd_line_args.no_convert:
+            self.run_tex()
+            self.run_convert()
+            if not self.cmd_line_args.no_cleanup:
+                self.clean_up()
 
-def process_source_file(file_name, cmd_line_args):
-    inside_tikz = False
-    picture_number = 1
-    line_number = 0
 
-    with open(file_name) as file:
-        for line in file:
-            line_number += 1
-            line_prefix = line.lstrip()
-            line = line.rstrip()
+class ReaderState(Enum):
+    DEFAULT = "default"
+    IN_LATEX = "latex"
+    IN_TIKZ = "tikz"
 
-            if line_prefix.startswith(r"\begin{tikzpicture}"):
-                pf = TikzConverter(
-                    file_name,
-                    line_number,
-                    picture_number,
-                    cmd_line_args.template_directory,
-                )
-                pf.append(line)
-                picture_number += 1
-                inside_tikz = True
-                continue
-            elif line_prefix.startswith(r"\end{tikzpicture}"):
-                pf.append(line)
-                if cmd_line_args.make_tikz:
-                    pf.write_tikz_file()
-                pf.write_tex_file()
-                if not cmd_line_args.skip_convert:
-                    pf.run_tex()
-                    pf.run_convert()
-                    if not cmd_line_args.skip_cleanup:
-                        pf.clean_up()
-                inside_tikz = False
-                continue
 
-            if inside_tikz:
-                pf.append(line)
+class FileProcessor(object):
+    def __init__(self, file_name, cmd_line_args):
+        self.file_name = file_name
+        self.cmd_line_args = cmd_line_args
+        self.picture_number = 1
+        self.line_number = 0
+        self.headers = []
+        self.converter = None
+
+    def start_converter(self, line=None):
+        if self.converter is not None:
+            raise RuntimeError("Converter already active")
+        self.converter = LaTeXConverter(
+            self.file_name, self.line_number, self.picture_number, self.cmd_line_args
+        )
+        if line is not None:
+            self.converter.append(line)
+        self.picture_number += 1
+
+    def complete_converter(self, line=None):
+        if line is not None:
+            self.converter.append(line)
+        self.converter.convert(self.headers)
+        self.converter = None
+
+    def process_file(self):
+        state = ReaderState.DEFAULT
+
+        with open(self.file_name) as file:
+            for line in file:
+                self.line_number += 1
+                line_prefix = line.strip()
+                line = line.rstrip()
+
+                if state == ReaderState.DEFAULT:
+                    if line_prefix.startswith(r"#+LATEX_HEADER:"):
+                        match = re.fullmatch(r"#\+LATEX_HEADER:\s+(.+)", line_prefix)
+                        if match is None:
+                            raise RuntimeError(f"Can't match '{line_prefix}'")
+                        else:
+                            self.headers.append(match[1])
+
+                    elif line_prefix.startswith(r"\begin{tikzpicture}"):
+                        self.start_converter(line)
+                        state = ReaderState.IN_TIKZ
+                        continue
+
+                    elif re.match(r"#\+BEGIN_EXPORT\s+latex", line_prefix):
+                        self.start_converter()
+                        state = ReaderState.IN_LATEX
+                        continue
+
+                elif state == ReaderState.IN_TIKZ:
+                    if line_prefix.startswith(r"\end{tikzpicture}"):
+                        self.complete_converter(line)
+                        state = ReaderState.DEFAULT
+                        continue
+                    else:
+                        self.converter.append(line)
+
+                elif state == ReaderState.IN_LATEX:
+                    if line_prefix.startswith(r"#+END_EXPORT"):
+                        self.complete_converter()
+                        state = ReaderState.DEFAULT
+                        continue
+                    else:
+                        self.converter.append(line)
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--template-directory",
-    default="/Users/tom/Taylor/Classes/share/jinja2",
+    default="/Users/tom/Taylor/Tools/share/jinja2",
     help="Directory containing Jinja templates",
 )
 parser.add_argument(
@@ -130,17 +181,15 @@ parser.add_argument(
     default=False,
 )
 parser.add_argument(
-    "--skip-convert",
-    action="store_true",
-    help="Skip the conversion step",
-    default=False,
+    "--no-convert", action="store_true", help="Skip the conversion step", default=False
 )
 parser.add_argument(
-    "--skip-cleanup", action="store_true", help="Skip the clean-up step", default=False
+    "--no-cleanup", action="store_true", help="Skip the clean-up step", default=False
 )
 parser.add_argument("file", nargs="+", help="Input file to process")
 
 args = parser.parse_args()
 
 for source_file in args.file:
-    process_source_file(source_file, args)
+    processor = FileProcessor(source_file, args)
+    processor.process_file()
