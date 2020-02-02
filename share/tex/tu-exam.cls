@@ -19,6 +19,7 @@
 \RequirePackage{booktabs}
 \RequirePackage{graphicx}
 \RequirePackage{caption}
+\RequirePackage{framed}
 
 % Defined in exam class
 \header{\tue@name}{}{Page \thepage\ of \numpages}

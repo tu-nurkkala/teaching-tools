@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-basename=$(basename $1 .ipynb)
+basename=$(basename $1 .org)
 
 pandoc \
     --atx-headers \
