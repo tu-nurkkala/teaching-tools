@@ -40,3 +40,9 @@
 }
 
 \newenvironment{overview}{\begin{flushleft}\textsc{In this assignment},}{\end{flushleft}}
+
+\renewcommand{\solutiontitle}{
+  \noindent
+  {\color{purple}\textbf{Solution}}
+  \par\noindent
+}
