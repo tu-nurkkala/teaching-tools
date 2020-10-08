@@ -20,7 +20,6 @@ with open(student_file_path, "r") as in_file:
             print("CREATE SCHEMA public;", file=out)
 
     with open(path.join(student_file_dir, "import-dvdrental.sh"), "w") as out:
-        print("/usr/bin/env bash\n", file=out)
         for student in students:
             print(f"pg_restore -d {student['pg_db_name']} dvdrental.tar", file=out)
 
