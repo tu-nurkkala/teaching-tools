@@ -1,0 +1,641 @@
+#+TITLE: Set Up for Trigger HW
+
+Set up databases for students to use on trigger homework.
+Populates student databases with =dvdrental= tables and data.
+
+* User Names and Passwords
+Copied manually from ../sql-ddl/set-up-db.org
+#+NAME: user-accounts
+#+RESULTS: make-account-password
+| andrew_blomenberg | talacoba | Andrew | andrew_blomenberg@taylor.edu |
+| andrew_dorn       | gilijusu | Andrew | andrew_dorn@taylor.edu       |
+| bryson_shelor     | kanobube | Bryson | bryson_shelor@taylor.edu     |
+| daniel_thomas     | tezajaho | Daniel | daniel_thomas@taylor.edu     |
+| eliza_you         | kezemobo | Eliza  | eliza_you@taylor.edu         |
+| jordan_freitag    | xicanace | Jordan | jordan_freitag@taylor.edu    |
+| josiah_keller     | wiqekasu | Josiah | josiah_keller@taylor.edu     |
+| luke_white        | bunewijo | Luke   | luke_white@taylor.edu        |
+| matt_hapner       | pixotamo | Matt   | matthew_hapner@taylor.edu    |
+| nathan_meyer      | furirelo | Nathan | nathan_meyer@taylor.edu      |
+| noah_lindsey      | yodaxiya | Noah   | noah_lindsey@taylor.edu      |
+| ross_otto         | vevevizu | Ross   | rossaotto@gmail.com          |
+| seth_lugibihl     | vozadepu | Seth   | seth_lugibihl@taylor.edu     |
+| tom_metzger       | tajiteso | Tom    | tom_metzger@taylor.edu       |
+* Clobber All Existing Tables in =public= Schema
+#+NAME: drop-schema
+#+HEADERS: :var accounts=user-accounts
+#+BEGIN_SRC python :results output code :wrap src bash
+for (username, password, name, email) in accounts:
+    print("\c {}".format(username))
+    print("DROP SCHEMA public CASCADE;")
+    print("CREATE SCHEMA public;")
+#+END_SRC
+
+#+RESULTS: drop-schema
+#+BEGIN_src bash
+\c andrew_blomenberg
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c andrew_dorn
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c bryson_shelor
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c daniel_thomas
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c eliza_you
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c jordan_freitag
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c josiah_keller
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c luke_white
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c matt_hapner
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c nathan_meyer
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c noah_lindsey
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c ross_otto
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c seth_lugibihl
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\c tom_metzger
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+#+END_src
+* Create Restore Commands
+#+NAME: create-commands
+#+HEADERS: :var accounts=user-accounts
+#+BEGIN_SRC python :results output code :wrap src bash
+print("/usr/bin/env bash")
+for (username, password, name, email) in accounts:
+    print("pg_restore -d {} dvdrental.tar".format(username))
+#+END_SRC
+
+#+RESULTS: create-commands
+#+BEGIN_src bash
+/usr/bin/env bash
+pg_restore -d andrew_blomenberg dvdrental.tar
+pg_restore -d andrew_dorn dvdrental.tar
+pg_restore -d bryson_shelor dvdrental.tar
+pg_restore -d daniel_thomas dvdrental.tar
+pg_restore -d eliza_you dvdrental.tar
+pg_restore -d jordan_freitag dvdrental.tar
+pg_restore -d josiah_keller dvdrental.tar
+pg_restore -d luke_white dvdrental.tar
+pg_restore -d matt_hapner dvdrental.tar
+pg_restore -d nathan_meyer dvdrental.tar
+pg_restore -d noah_lindsey dvdrental.tar
+pg_restore -d ross_otto dvdrental.tar
+pg_restore -d seth_lugibihl dvdrental.tar
+pg_restore -d tom_metzger dvdrental.tar
+#+END_src
+* Create Alter Commands
+For whatever reason, the =pg_restore= command for the =dvdrental= database
+doesn't set the ownership of tables or sequences properly. Set them manually.
+#+NAME: create-alters
+#+HEADERS: :var accounts=user-accounts
+#+BEGIN_SRC python :results output code :wrap SRC sql
+tables = ['actor', 'address', 'category', 'city', 'country', 'customer',
+          'film', 'film_actor', 'film_category', 'inventory', 'language',
+          'payment', 'rental', 'staff', 'store']
+
+sequences = ['actor_actor_id_seq', 'address_address_id_seq',
+             'category_category_id_seq', 'city_city_id_seq', 'country_country_id_seq',
+             'customer_customer_id_seq', 'film_film_id_seq', 'inventory_inventory_id_seq',
+             'language_language_id_seq', 'payment_payment_id_seq', 'rental_rental_id_seq',
+             'staff_staff_id_seq', 'store_store_id_seq']
+
+views = ['actor_info', 'customer_list', 'film_list', 'nicer_but_slower_film_list',
+         'sales_by_film_category', 'sales_by_store', 'staff_list']
+
+for (username, password, name, email) in accounts:
+    print("\c {}".format(username))
+    for table in tables:
+        print("ALTER TABLE {} OWNER TO {};".format(table, username))
+    for sequence in sequences:
+        print("ALTER SEQUENCE {} OWNER TO {};".format(sequence, username))
+    for view in views:
+        print("ALTER VIEW {} OWNER TO {};".format(view, username))
+#+END_SRC
+
+#+RESULTS: create-alters
+#+BEGIN_SRC sql
+\c andrew_blomenberg
+ALTER TABLE actor OWNER TO andrew_blomenberg;
+ALTER TABLE address OWNER TO andrew_blomenberg;
+ALTER TABLE category OWNER TO andrew_blomenberg;
+ALTER TABLE city OWNER TO andrew_blomenberg;
+ALTER TABLE country OWNER TO andrew_blomenberg;
+ALTER TABLE customer OWNER TO andrew_blomenberg;
+ALTER TABLE film OWNER TO andrew_blomenberg;
+ALTER TABLE film_actor OWNER TO andrew_blomenberg;
+ALTER TABLE film_category OWNER TO andrew_blomenberg;
+ALTER TABLE inventory OWNER TO andrew_blomenberg;
+ALTER TABLE language OWNER TO andrew_blomenberg;
+ALTER TABLE payment OWNER TO andrew_blomenberg;
+ALTER TABLE rental OWNER TO andrew_blomenberg;
+ALTER TABLE staff OWNER TO andrew_blomenberg;
+ALTER TABLE store OWNER TO andrew_blomenberg;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE address_address_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE category_category_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE city_city_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE country_country_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE film_film_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE language_language_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO andrew_blomenberg;
+ALTER SEQUENCE store_store_id_seq OWNER TO andrew_blomenberg;
+ALTER VIEW actor_info OWNER TO andrew_blomenberg;
+ALTER VIEW customer_list OWNER TO andrew_blomenberg;
+ALTER VIEW film_list OWNER TO andrew_blomenberg;
+ALTER VIEW nicer_but_slower_film_list OWNER TO andrew_blomenberg;
+ALTER VIEW sales_by_film_category OWNER TO andrew_blomenberg;
+ALTER VIEW sales_by_store OWNER TO andrew_blomenberg;
+ALTER VIEW staff_list OWNER TO andrew_blomenberg;
+\c andrew_dorn
+ALTER TABLE actor OWNER TO andrew_dorn;
+ALTER TABLE address OWNER TO andrew_dorn;
+ALTER TABLE category OWNER TO andrew_dorn;
+ALTER TABLE city OWNER TO andrew_dorn;
+ALTER TABLE country OWNER TO andrew_dorn;
+ALTER TABLE customer OWNER TO andrew_dorn;
+ALTER TABLE film OWNER TO andrew_dorn;
+ALTER TABLE film_actor OWNER TO andrew_dorn;
+ALTER TABLE film_category OWNER TO andrew_dorn;
+ALTER TABLE inventory OWNER TO andrew_dorn;
+ALTER TABLE language OWNER TO andrew_dorn;
+ALTER TABLE payment OWNER TO andrew_dorn;
+ALTER TABLE rental OWNER TO andrew_dorn;
+ALTER TABLE staff OWNER TO andrew_dorn;
+ALTER TABLE store OWNER TO andrew_dorn;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE address_address_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE category_category_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE city_city_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE country_country_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE film_film_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE language_language_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO andrew_dorn;
+ALTER SEQUENCE store_store_id_seq OWNER TO andrew_dorn;
+ALTER VIEW actor_info OWNER TO andrew_dorn;
+ALTER VIEW customer_list OWNER TO andrew_dorn;
+ALTER VIEW film_list OWNER TO andrew_dorn;
+ALTER VIEW nicer_but_slower_film_list OWNER TO andrew_dorn;
+ALTER VIEW sales_by_film_category OWNER TO andrew_dorn;
+ALTER VIEW sales_by_store OWNER TO andrew_dorn;
+ALTER VIEW staff_list OWNER TO andrew_dorn;
+\c bryson_shelor
+ALTER TABLE actor OWNER TO bryson_shelor;
+ALTER TABLE address OWNER TO bryson_shelor;
+ALTER TABLE category OWNER TO bryson_shelor;
+ALTER TABLE city OWNER TO bryson_shelor;
+ALTER TABLE country OWNER TO bryson_shelor;
+ALTER TABLE customer OWNER TO bryson_shelor;
+ALTER TABLE film OWNER TO bryson_shelor;
+ALTER TABLE film_actor OWNER TO bryson_shelor;
+ALTER TABLE film_category OWNER TO bryson_shelor;
+ALTER TABLE inventory OWNER TO bryson_shelor;
+ALTER TABLE language OWNER TO bryson_shelor;
+ALTER TABLE payment OWNER TO bryson_shelor;
+ALTER TABLE rental OWNER TO bryson_shelor;
+ALTER TABLE staff OWNER TO bryson_shelor;
+ALTER TABLE store OWNER TO bryson_shelor;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE address_address_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE category_category_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE city_city_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE country_country_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE film_film_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE language_language_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO bryson_shelor;
+ALTER SEQUENCE store_store_id_seq OWNER TO bryson_shelor;
+ALTER VIEW actor_info OWNER TO bryson_shelor;
+ALTER VIEW customer_list OWNER TO bryson_shelor;
+ALTER VIEW film_list OWNER TO bryson_shelor;
+ALTER VIEW nicer_but_slower_film_list OWNER TO bryson_shelor;
+ALTER VIEW sales_by_film_category OWNER TO bryson_shelor;
+ALTER VIEW sales_by_store OWNER TO bryson_shelor;
+ALTER VIEW staff_list OWNER TO bryson_shelor;
+\c daniel_thomas
+ALTER TABLE actor OWNER TO daniel_thomas;
+ALTER TABLE address OWNER TO daniel_thomas;
+ALTER TABLE category OWNER TO daniel_thomas;
+ALTER TABLE city OWNER TO daniel_thomas;
+ALTER TABLE country OWNER TO daniel_thomas;
+ALTER TABLE customer OWNER TO daniel_thomas;
+ALTER TABLE film OWNER TO daniel_thomas;
+ALTER TABLE film_actor OWNER TO daniel_thomas;
+ALTER TABLE film_category OWNER TO daniel_thomas;
+ALTER TABLE inventory OWNER TO daniel_thomas;
+ALTER TABLE language OWNER TO daniel_thomas;
+ALTER TABLE payment OWNER TO daniel_thomas;
+ALTER TABLE rental OWNER TO daniel_thomas;
+ALTER TABLE staff OWNER TO daniel_thomas;
+ALTER TABLE store OWNER TO daniel_thomas;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE address_address_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE category_category_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE city_city_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE country_country_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE film_film_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE language_language_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO daniel_thomas;
+ALTER SEQUENCE store_store_id_seq OWNER TO daniel_thomas;
+ALTER VIEW actor_info OWNER TO daniel_thomas;
+ALTER VIEW customer_list OWNER TO daniel_thomas;
+ALTER VIEW film_list OWNER TO daniel_thomas;
+ALTER VIEW nicer_but_slower_film_list OWNER TO daniel_thomas;
+ALTER VIEW sales_by_film_category OWNER TO daniel_thomas;
+ALTER VIEW sales_by_store OWNER TO daniel_thomas;
+ALTER VIEW staff_list OWNER TO daniel_thomas;
+\c eliza_you
+ALTER TABLE actor OWNER TO eliza_you;
+ALTER TABLE address OWNER TO eliza_you;
+ALTER TABLE category OWNER TO eliza_you;
+ALTER TABLE city OWNER TO eliza_you;
+ALTER TABLE country OWNER TO eliza_you;
+ALTER TABLE customer OWNER TO eliza_you;
+ALTER TABLE film OWNER TO eliza_you;
+ALTER TABLE film_actor OWNER TO eliza_you;
+ALTER TABLE film_category OWNER TO eliza_you;
+ALTER TABLE inventory OWNER TO eliza_you;
+ALTER TABLE language OWNER TO eliza_you;
+ALTER TABLE payment OWNER TO eliza_you;
+ALTER TABLE rental OWNER TO eliza_you;
+ALTER TABLE staff OWNER TO eliza_you;
+ALTER TABLE store OWNER TO eliza_you;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE address_address_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE category_category_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE city_city_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE country_country_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE film_film_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE language_language_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO eliza_you;
+ALTER SEQUENCE store_store_id_seq OWNER TO eliza_you;
+ALTER VIEW actor_info OWNER TO eliza_you;
+ALTER VIEW customer_list OWNER TO eliza_you;
+ALTER VIEW film_list OWNER TO eliza_you;
+ALTER VIEW nicer_but_slower_film_list OWNER TO eliza_you;
+ALTER VIEW sales_by_film_category OWNER TO eliza_you;
+ALTER VIEW sales_by_store OWNER TO eliza_you;
+ALTER VIEW staff_list OWNER TO eliza_you;
+\c jordan_freitag
+ALTER TABLE actor OWNER TO jordan_freitag;
+ALTER TABLE address OWNER TO jordan_freitag;
+ALTER TABLE category OWNER TO jordan_freitag;
+ALTER TABLE city OWNER TO jordan_freitag;
+ALTER TABLE country OWNER TO jordan_freitag;
+ALTER TABLE customer OWNER TO jordan_freitag;
+ALTER TABLE film OWNER TO jordan_freitag;
+ALTER TABLE film_actor OWNER TO jordan_freitag;
+ALTER TABLE film_category OWNER TO jordan_freitag;
+ALTER TABLE inventory OWNER TO jordan_freitag;
+ALTER TABLE language OWNER TO jordan_freitag;
+ALTER TABLE payment OWNER TO jordan_freitag;
+ALTER TABLE rental OWNER TO jordan_freitag;
+ALTER TABLE staff OWNER TO jordan_freitag;
+ALTER TABLE store OWNER TO jordan_freitag;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE address_address_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE category_category_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE city_city_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE country_country_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE film_film_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE language_language_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO jordan_freitag;
+ALTER SEQUENCE store_store_id_seq OWNER TO jordan_freitag;
+ALTER VIEW actor_info OWNER TO jordan_freitag;
+ALTER VIEW customer_list OWNER TO jordan_freitag;
+ALTER VIEW film_list OWNER TO jordan_freitag;
+ALTER VIEW nicer_but_slower_film_list OWNER TO jordan_freitag;
+ALTER VIEW sales_by_film_category OWNER TO jordan_freitag;
+ALTER VIEW sales_by_store OWNER TO jordan_freitag;
+ALTER VIEW staff_list OWNER TO jordan_freitag;
+\c josiah_keller
+ALTER TABLE actor OWNER TO josiah_keller;
+ALTER TABLE address OWNER TO josiah_keller;
+ALTER TABLE category OWNER TO josiah_keller;
+ALTER TABLE city OWNER TO josiah_keller;
+ALTER TABLE country OWNER TO josiah_keller;
+ALTER TABLE customer OWNER TO josiah_keller;
+ALTER TABLE film OWNER TO josiah_keller;
+ALTER TABLE film_actor OWNER TO josiah_keller;
+ALTER TABLE film_category OWNER TO josiah_keller;
+ALTER TABLE inventory OWNER TO josiah_keller;
+ALTER TABLE language OWNER TO josiah_keller;
+ALTER TABLE payment OWNER TO josiah_keller;
+ALTER TABLE rental OWNER TO josiah_keller;
+ALTER TABLE staff OWNER TO josiah_keller;
+ALTER TABLE store OWNER TO josiah_keller;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE address_address_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE category_category_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE city_city_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE country_country_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE film_film_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE language_language_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO josiah_keller;
+ALTER SEQUENCE store_store_id_seq OWNER TO josiah_keller;
+ALTER VIEW actor_info OWNER TO josiah_keller;
+ALTER VIEW customer_list OWNER TO josiah_keller;
+ALTER VIEW film_list OWNER TO josiah_keller;
+ALTER VIEW nicer_but_slower_film_list OWNER TO josiah_keller;
+ALTER VIEW sales_by_film_category OWNER TO josiah_keller;
+ALTER VIEW sales_by_store OWNER TO josiah_keller;
+ALTER VIEW staff_list OWNER TO josiah_keller;
+\c luke_white
+ALTER TABLE actor OWNER TO luke_white;
+ALTER TABLE address OWNER TO luke_white;
+ALTER TABLE category OWNER TO luke_white;
+ALTER TABLE city OWNER TO luke_white;
+ALTER TABLE country OWNER TO luke_white;
+ALTER TABLE customer OWNER TO luke_white;
+ALTER TABLE film OWNER TO luke_white;
+ALTER TABLE film_actor OWNER TO luke_white;
+ALTER TABLE film_category OWNER TO luke_white;
+ALTER TABLE inventory OWNER TO luke_white;
+ALTER TABLE language OWNER TO luke_white;
+ALTER TABLE payment OWNER TO luke_white;
+ALTER TABLE rental OWNER TO luke_white;
+ALTER TABLE staff OWNER TO luke_white;
+ALTER TABLE store OWNER TO luke_white;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO luke_white;
+ALTER SEQUENCE address_address_id_seq OWNER TO luke_white;
+ALTER SEQUENCE category_category_id_seq OWNER TO luke_white;
+ALTER SEQUENCE city_city_id_seq OWNER TO luke_white;
+ALTER SEQUENCE country_country_id_seq OWNER TO luke_white;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO luke_white;
+ALTER SEQUENCE film_film_id_seq OWNER TO luke_white;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO luke_white;
+ALTER SEQUENCE language_language_id_seq OWNER TO luke_white;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO luke_white;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO luke_white;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO luke_white;
+ALTER SEQUENCE store_store_id_seq OWNER TO luke_white;
+ALTER VIEW actor_info OWNER TO luke_white;
+ALTER VIEW customer_list OWNER TO luke_white;
+ALTER VIEW film_list OWNER TO luke_white;
+ALTER VIEW nicer_but_slower_film_list OWNER TO luke_white;
+ALTER VIEW sales_by_film_category OWNER TO luke_white;
+ALTER VIEW sales_by_store OWNER TO luke_white;
+ALTER VIEW staff_list OWNER TO luke_white;
+\c matt_hapner
+ALTER TABLE actor OWNER TO matt_hapner;
+ALTER TABLE address OWNER TO matt_hapner;
+ALTER TABLE category OWNER TO matt_hapner;
+ALTER TABLE city OWNER TO matt_hapner;
+ALTER TABLE country OWNER TO matt_hapner;
+ALTER TABLE customer OWNER TO matt_hapner;
+ALTER TABLE film OWNER TO matt_hapner;
+ALTER TABLE film_actor OWNER TO matt_hapner;
+ALTER TABLE film_category OWNER TO matt_hapner;
+ALTER TABLE inventory OWNER TO matt_hapner;
+ALTER TABLE language OWNER TO matt_hapner;
+ALTER TABLE payment OWNER TO matt_hapner;
+ALTER TABLE rental OWNER TO matt_hapner;
+ALTER TABLE staff OWNER TO matt_hapner;
+ALTER TABLE store OWNER TO matt_hapner;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE address_address_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE category_category_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE city_city_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE country_country_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE film_film_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE language_language_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO matt_hapner;
+ALTER SEQUENCE store_store_id_seq OWNER TO matt_hapner;
+ALTER VIEW actor_info OWNER TO matt_hapner;
+ALTER VIEW customer_list OWNER TO matt_hapner;
+ALTER VIEW film_list OWNER TO matt_hapner;
+ALTER VIEW nicer_but_slower_film_list OWNER TO matt_hapner;
+ALTER VIEW sales_by_film_category OWNER TO matt_hapner;
+ALTER VIEW sales_by_store OWNER TO matt_hapner;
+ALTER VIEW staff_list OWNER TO matt_hapner;
+\c nathan_meyer
+ALTER TABLE actor OWNER TO nathan_meyer;
+ALTER TABLE address OWNER TO nathan_meyer;
+ALTER TABLE category OWNER TO nathan_meyer;
+ALTER TABLE city OWNER TO nathan_meyer;
+ALTER TABLE country OWNER TO nathan_meyer;
+ALTER TABLE customer OWNER TO nathan_meyer;
+ALTER TABLE film OWNER TO nathan_meyer;
+ALTER TABLE film_actor OWNER TO nathan_meyer;
+ALTER TABLE film_category OWNER TO nathan_meyer;
+ALTER TABLE inventory OWNER TO nathan_meyer;
+ALTER TABLE language OWNER TO nathan_meyer;
+ALTER TABLE payment OWNER TO nathan_meyer;
+ALTER TABLE rental OWNER TO nathan_meyer;
+ALTER TABLE staff OWNER TO nathan_meyer;
+ALTER TABLE store OWNER TO nathan_meyer;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE address_address_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE category_category_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE city_city_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE country_country_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE film_film_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE language_language_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO nathan_meyer;
+ALTER SEQUENCE store_store_id_seq OWNER TO nathan_meyer;
+ALTER VIEW actor_info OWNER TO nathan_meyer;
+ALTER VIEW customer_list OWNER TO nathan_meyer;
+ALTER VIEW film_list OWNER TO nathan_meyer;
+ALTER VIEW nicer_but_slower_film_list OWNER TO nathan_meyer;
+ALTER VIEW sales_by_film_category OWNER TO nathan_meyer;
+ALTER VIEW sales_by_store OWNER TO nathan_meyer;
+ALTER VIEW staff_list OWNER TO nathan_meyer;
+\c noah_lindsey
+ALTER TABLE actor OWNER TO noah_lindsey;
+ALTER TABLE address OWNER TO noah_lindsey;
+ALTER TABLE category OWNER TO noah_lindsey;
+ALTER TABLE city OWNER TO noah_lindsey;
+ALTER TABLE country OWNER TO noah_lindsey;
+ALTER TABLE customer OWNER TO noah_lindsey;
+ALTER TABLE film OWNER TO noah_lindsey;
+ALTER TABLE film_actor OWNER TO noah_lindsey;
+ALTER TABLE film_category OWNER TO noah_lindsey;
+ALTER TABLE inventory OWNER TO noah_lindsey;
+ALTER TABLE language OWNER TO noah_lindsey;
+ALTER TABLE payment OWNER TO noah_lindsey;
+ALTER TABLE rental OWNER TO noah_lindsey;
+ALTER TABLE staff OWNER TO noah_lindsey;
+ALTER TABLE store OWNER TO noah_lindsey;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE address_address_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE category_category_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE city_city_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE country_country_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE film_film_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE language_language_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO noah_lindsey;
+ALTER SEQUENCE store_store_id_seq OWNER TO noah_lindsey;
+ALTER VIEW actor_info OWNER TO noah_lindsey;
+ALTER VIEW customer_list OWNER TO noah_lindsey;
+ALTER VIEW film_list OWNER TO noah_lindsey;
+ALTER VIEW nicer_but_slower_film_list OWNER TO noah_lindsey;
+ALTER VIEW sales_by_film_category OWNER TO noah_lindsey;
+ALTER VIEW sales_by_store OWNER TO noah_lindsey;
+ALTER VIEW staff_list OWNER TO noah_lindsey;
+\c ross_otto
+ALTER TABLE actor OWNER TO ross_otto;
+ALTER TABLE address OWNER TO ross_otto;
+ALTER TABLE category OWNER TO ross_otto;
+ALTER TABLE city OWNER TO ross_otto;
+ALTER TABLE country OWNER TO ross_otto;
+ALTER TABLE customer OWNER TO ross_otto;
+ALTER TABLE film OWNER TO ross_otto;
+ALTER TABLE film_actor OWNER TO ross_otto;
+ALTER TABLE film_category OWNER TO ross_otto;
+ALTER TABLE inventory OWNER TO ross_otto;
+ALTER TABLE language OWNER TO ross_otto;
+ALTER TABLE payment OWNER TO ross_otto;
+ALTER TABLE rental OWNER TO ross_otto;
+ALTER TABLE staff OWNER TO ross_otto;
+ALTER TABLE store OWNER TO ross_otto;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE address_address_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE category_category_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE city_city_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE country_country_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE film_film_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE language_language_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO ross_otto;
+ALTER SEQUENCE store_store_id_seq OWNER TO ross_otto;
+ALTER VIEW actor_info OWNER TO ross_otto;
+ALTER VIEW customer_list OWNER TO ross_otto;
+ALTER VIEW film_list OWNER TO ross_otto;
+ALTER VIEW nicer_but_slower_film_list OWNER TO ross_otto;
+ALTER VIEW sales_by_film_category OWNER TO ross_otto;
+ALTER VIEW sales_by_store OWNER TO ross_otto;
+ALTER VIEW staff_list OWNER TO ross_otto;
+\c seth_lugibihl
+ALTER TABLE actor OWNER TO seth_lugibihl;
+ALTER TABLE address OWNER TO seth_lugibihl;
+ALTER TABLE category OWNER TO seth_lugibihl;
+ALTER TABLE city OWNER TO seth_lugibihl;
+ALTER TABLE country OWNER TO seth_lugibihl;
+ALTER TABLE customer OWNER TO seth_lugibihl;
+ALTER TABLE film OWNER TO seth_lugibihl;
+ALTER TABLE film_actor OWNER TO seth_lugibihl;
+ALTER TABLE film_category OWNER TO seth_lugibihl;
+ALTER TABLE inventory OWNER TO seth_lugibihl;
+ALTER TABLE language OWNER TO seth_lugibihl;
+ALTER TABLE payment OWNER TO seth_lugibihl;
+ALTER TABLE rental OWNER TO seth_lugibihl;
+ALTER TABLE staff OWNER TO seth_lugibihl;
+ALTER TABLE store OWNER TO seth_lugibihl;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE address_address_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE category_category_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE city_city_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE country_country_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE film_film_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE language_language_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO seth_lugibihl;
+ALTER SEQUENCE store_store_id_seq OWNER TO seth_lugibihl;
+ALTER VIEW actor_info OWNER TO seth_lugibihl;
+ALTER VIEW customer_list OWNER TO seth_lugibihl;
+ALTER VIEW film_list OWNER TO seth_lugibihl;
+ALTER VIEW nicer_but_slower_film_list OWNER TO seth_lugibihl;
+ALTER VIEW sales_by_film_category OWNER TO seth_lugibihl;
+ALTER VIEW sales_by_store OWNER TO seth_lugibihl;
+ALTER VIEW staff_list OWNER TO seth_lugibihl;
+\c tom_metzger
+ALTER TABLE actor OWNER TO tom_metzger;
+ALTER TABLE address OWNER TO tom_metzger;
+ALTER TABLE category OWNER TO tom_metzger;
+ALTER TABLE city OWNER TO tom_metzger;
+ALTER TABLE country OWNER TO tom_metzger;
+ALTER TABLE customer OWNER TO tom_metzger;
+ALTER TABLE film OWNER TO tom_metzger;
+ALTER TABLE film_actor OWNER TO tom_metzger;
+ALTER TABLE film_category OWNER TO tom_metzger;
+ALTER TABLE inventory OWNER TO tom_metzger;
+ALTER TABLE language OWNER TO tom_metzger;
+ALTER TABLE payment OWNER TO tom_metzger;
+ALTER TABLE rental OWNER TO tom_metzger;
+ALTER TABLE staff OWNER TO tom_metzger;
+ALTER TABLE store OWNER TO tom_metzger;
+ALTER SEQUENCE actor_actor_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE address_address_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE category_category_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE city_city_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE country_country_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE customer_customer_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE film_film_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE inventory_inventory_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE language_language_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE payment_payment_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE rental_rental_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE staff_staff_id_seq OWNER TO tom_metzger;
+ALTER SEQUENCE store_store_id_seq OWNER TO tom_metzger;
+ALTER VIEW actor_info OWNER TO tom_metzger;
+ALTER VIEW customer_list OWNER TO tom_metzger;
+ALTER VIEW film_list OWNER TO tom_metzger;
+ALTER VIEW nicer_but_slower_film_list OWNER TO tom_metzger;
+ALTER VIEW sales_by_film_category OWNER TO tom_metzger;
+ALTER VIEW sales_by_store OWNER TO tom_metzger;
+ALTER VIEW staff_list OWNER TO tom_metzger;
+#+END_SRC

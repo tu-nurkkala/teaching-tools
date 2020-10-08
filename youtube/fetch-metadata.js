@@ -217,6 +217,7 @@ async function getPlaylists(auth) {
             knex("video")
               .insert({
                 id: video.id,
+                url: `https://youtu.be/${video.id}`,
                 published_at: video.snippet.publishedAt,
                 title: video.snippet.title,
                 description: video.snippet.description,
