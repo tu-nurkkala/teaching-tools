@@ -1,49 +1,12 @@
+#!/usr/bin/env python3
+
 import csv
 import json
-import random
 import re
-from datetime import datetime
+import sys
+from os import path
 
-
-# import psycopg2
-
-
-def time_stamp():
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-
-# def run_psql(sql_statement):
-#     with psycopg2.connect(host="faraday.cse.taylor.edu", user="tnurkkala", dbname="postgres") as connection:
-#         with connection.cursor() as cursor:
-#             cursor.execute(sql_statement)
-
-
-def create_pg_user(username, password):
-    return f"CREATE USER {username} WITH ENCRYPTED PASSWORD '{password}';"
-
-
-def create_pg_database(username, db_name):
-    return f"CREATE DATABASE {db_name} WITH OWNER {username};"
-
-
-def drop_pg_user(username):
-    return f"DROP USER {username};"
-
-
-def drop_pg_database(db_name):
-    return f"DROP DATABASE {db_name};"
-
-
-def random_vowel():
-    return random.choice("aeiou")
-
-
-def random_consonant():
-    return random.choice("bcdfghjklmnpqrstvwxyz")
-
-
-def make_password():
-    return "".join(random_consonant() + random_vowel() for i in range(4))
+from helpers import make_password
 
 
 def read_canvas_grades_file(file_name):
@@ -80,21 +43,10 @@ def read_canvas_grades_file(file_name):
 
 
 ## Provide the name of a Canvas grade file (export CSV from grade book).
+grade_file_path = path.abspath(sys.argv[1])
+(grade_file_dir, grade_file) = path.split(grade_file_path)
 
-if __name__ == '__main__':
-    import sys
+students = read_canvas_grades_file(grade_file_path)
 
-    students = read_canvas_grades_file(sys.argv[1])
-
-    with open("create-student-dbs.sql", "w") as out:
-        for student in students:
-            print(create_pg_user(student["pg_username"], student["pg_password"]), file=out)
-            print(create_pg_database(student["pg_username"], student["pg_db_name"]), file=out)
-
-    with open("drop-student-dbs.sql", "w") as out:
-        for student in students:
-            print(drop_pg_database(student["pg_db_name"]), file=out)
-            print(drop_pg_user(student["pg_username"]), file=out)
-
-    with open("student-data.json", "w") as out:
-        print(json.dumps(students, indent=2), file=out)
+with open(path.join(grade_file_dir, "student-data.json"), "w") as out:
+    print(json.dumps(students, indent=2), file=out)
