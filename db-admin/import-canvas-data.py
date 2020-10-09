@@ -6,7 +6,7 @@ import re
 import sys
 from os import path
 
-from helpers import make_password
+from helpers import make_password, destination_dir
 
 
 def read_canvas_grades_file(file_name):
@@ -48,5 +48,5 @@ grade_file_path = path.abspath(sys.argv[1])
 
 students = read_canvas_grades_file(grade_file_path)
 
-with open(path.join(grade_file_dir, "student-data.json"), "w") as out:
+with open(destination_dir(grade_file_dir, "student-data.json"), "w") as out:
     print(json.dumps(students, indent=2), file=out)

@@ -1,4 +1,5 @@
 import random
+from os import path
 from datetime import datetime
 
 
@@ -44,3 +45,9 @@ def random_consonant():
 
 def make_password():
     return "".join(random_consonant() + random_vowel() for i in range(4))
+
+
+def destination_dir(base_dir, file_name):
+    dir_path = path.join(base_dir, "db-admin", file_name)
+    print(dir_path)
+    return dir_path
