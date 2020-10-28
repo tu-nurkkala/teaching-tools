@@ -1,6 +1,5 @@
 auto/
 node_modules/
 foo*
-youtube/client_secret.json
 __pycache__/
 .idea/
