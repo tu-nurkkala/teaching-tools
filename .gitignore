@@ -3,3 +3,4 @@ node_modules/
 foo*
 __pycache__/
 .idea/
+venv/

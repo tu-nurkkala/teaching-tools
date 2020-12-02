@@ -1,0 +1,518 @@
+{
+  "defaults": {
+    "term": 6
+  },
+  "courses": [
+    {
+      "id": 34,
+      "name": "COS 492 - Senior Project",
+      "account_id": 1,
+      "uuid": "KBkemdL2RaL05rerLtPzP3rS1NUTEbDNWMen0VsI",
+      "start_at": "2020-01-06T05:00:00Z",
+      "grading_standard_id": null,
+      "is_public": false,
+      "created_at": "2020-01-05T22:47:53Z",
+      "course_code": "COS 492",
+      "default_view": "syllabus",
+      "root_account_id": 1,
+      "enrollment_term_id": 1,
+      "license": "cc_by_sa",
+      "grade_passback_setting": null,
+      "end_at": "2020-01-29T05:00:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 1,
+        "name": "Default Term",
+        "start_at": null,
+        "end_at": null,
+        "created_at": "2018-06-20T16:27:46Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_KBkemdL2RaL05rerLtPzP3rS1NUTEbDNWMen0VsI.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "sis_course_id": null,
+      "integration_id": null,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "course_format": "on_campus",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 22,
+      "name": "COS 243 - Multi-tier Web Application Development",
+      "account_id": 1,
+      "uuid": "3fweEPhydXBo2d7GGjuvYXgyM2LIg4ml8Dho8spS",
+      "start_at": "2019-08-27T15:55:00Z",
+      "grading_standard_id": 4,
+      "is_public": false,
+      "created_at": "2019-06-25T03:06:16Z",
+      "course_code": "COS 243",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 6,
+      "license": "cc_by_sa",
+      "grade_passback_setting": null,
+      "end_at": "2019-12-12T05:00:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 6,
+        "name": "Fall 2019",
+        "start_at": null,
+        "end_at": "2019-12-12T16:59:00Z",
+        "created_at": "2019-05-17T19:09:31Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_3fweEPhydXBo2d7GGjuvYXgyM2LIg4ml8Dho8spS.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "course_format": "on_campus",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 28,
+      "name": "COS 343 - Advanced Database Concepts",
+      "account_id": 1,
+      "uuid": "w4dXSsn4a6xEyYuk3rKPQuca5HEOcof3iimILqAD",
+      "start_at": "2019-08-27T15:54:00Z",
+      "grading_standard_id": 4,
+      "is_public": false,
+      "created_at": "2019-08-24T14:38:56Z",
+      "course_code": "COS 343",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 6,
+      "license": "cc_by_nc_sa",
+      "grade_passback_setting": null,
+      "end_at": null,
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 6,
+        "name": "Fall 2019",
+        "start_at": null,
+        "end_at": "2019-12-12T16:59:00Z",
+        "created_at": "2019-05-17T19:09:31Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_w4dXSsn4a6xEyYuk3rKPQuca5HEOcof3iimILqAD.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 29,
+      "name": "COS 380 - Natural Language Processing",
+      "account_id": 1,
+      "uuid": "gvt6RB7BOvRyHasBxNKYenFHfHHTHHXlLIfMleKI",
+      "start_at": "2019-08-27T15:57:00Z",
+      "grading_standard_id": 4,
+      "is_public": false,
+      "created_at": "2019-08-24T14:39:29Z",
+      "course_code": "COS 380",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 6,
+      "license": "cc_by_nc_sa",
+      "grade_passback_setting": null,
+      "end_at": null,
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 6,
+        "name": "Fall 2019",
+        "start_at": null,
+        "end_at": "2019-12-12T16:59:00Z",
+        "created_at": "2019-05-17T19:09:31Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_gvt6RB7BOvRyHasBxNKYenFHfHHTHHXlLIfMleKI.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 45,
+      "name": "COS 243 - Multi-tier Web Application Development",
+      "account_id": 1,
+      "uuid": "nZDeFpaBoxEnwhClOBEch1W6RvKqSYmnthyB0BZb",
+      "start_at": "2020-02-03T14:00:00Z",
+      "grading_standard_id": 4,
+      "is_public": false,
+      "created_at": "2020-02-01T21:37:44Z",
+      "course_code": "COS 243",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 7,
+      "license": "cc_by_sa",
+      "grade_passback_setting": null,
+      "end_at": "2020-05-29T03:59:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 7,
+        "name": "Spring 2020",
+        "start_at": null,
+        "end_at": "2020-05-31T04:00:00Z",
+        "created_at": "2020-01-06T17:27:57Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_nZDeFpaBoxEnwhClOBEch1W6RvKqSYmnthyB0BZb.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 42,
+      "name": "COS 284 - Introduction to Computer Systems",
+      "account_id": 1,
+      "uuid": "xqY3ybIZbPTJ3zQOthYBDlLL3xzUG4h01SrYbiD5",
+      "start_at": "2020-02-03T05:00:00Z",
+      "grading_standard_id": 0,
+      "is_public": false,
+      "created_at": "2020-02-01T21:18:50Z",
+      "course_code": "COS 284",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 7,
+      "license": "cc_by_nc_sa",
+      "grade_passback_setting": null,
+      "end_at": "2020-05-28T04:00:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 7,
+        "name": "Spring 2020",
+        "start_at": null,
+        "end_at": "2020-05-31T04:00:00Z",
+        "created_at": "2020-01-06T17:27:57Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_xqY3ybIZbPTJ3zQOthYBDlLL3xzUG4h01SrYbiD5.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "course_format": "on_campus",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 46,
+      "name": "COS 326 - Data Visualization",
+      "account_id": 1,
+      "uuid": "CZFoQdpI8lwfs4RvToa6LLd8QR1ayOLWGjwI5QRX",
+      "start_at": "2020-02-03T05:00:00Z",
+      "grading_standard_id": 0,
+      "is_public": false,
+      "created_at": "2020-02-01T21:56:35Z",
+      "course_code": "COS 326",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 7,
+      "license": "cc_by_nc_sa",
+      "grade_passback_setting": null,
+      "end_at": "2020-05-29T03:59:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 7,
+        "name": "Spring 2020",
+        "start_at": null,
+        "end_at": "2020-05-31T04:00:00Z",
+        "created_at": "2020-01-06T17:27:57Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_CZFoQdpI8lwfs4RvToa6LLd8QR1ayOLWGjwI5QRX.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 65,
+      "name": "COS 243 - Multi-tier Web Application Development",
+      "account_id": 1,
+      "uuid": "ZLQfKJ6RrhE7OgfqcFcupgT4ibJRrkI1a1TkiACL",
+      "start_at": "2020-08-19T13:00:00Z",
+      "grading_standard_id": 4,
+      "is_public": false,
+      "created_at": "2020-08-19T13:48:34Z",
+      "course_code": "COS 243",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 9,
+      "license": "cc_by_sa",
+      "grade_passback_setting": null,
+      "end_at": "2020-12-05T04:59:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 9,
+        "name": "Fall 2020",
+        "start_at": null,
+        "end_at": "2020-12-11T05:00:00Z",
+        "created_at": "2020-08-03T21:50:46Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_ZLQfKJ6RrhE7OgfqcFcupgT4ibJRrkI1a1TkiACL.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "sis_course_id": null,
+      "integration_id": null,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 67,
+      "name": "COS 343 - Advanced Database Concepts",
+      "account_id": 1,
+      "uuid": "TPYiuQ4HUWBZAccvoSjOBveL2npL1JQQEmYacZYk",
+      "start_at": "2020-08-19T15:54:00Z",
+      "grading_standard_id": 4,
+      "is_public": false,
+      "created_at": "2020-08-19T13:55:08Z",
+      "course_code": "COS 343",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 9,
+      "license": "cc_by_sa",
+      "grade_passback_setting": null,
+      "end_at": "2020-12-04T05:00:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 9,
+        "name": "Fall 2020",
+        "start_at": null,
+        "end_at": "2020-12-11T05:00:00Z",
+        "created_at": "2020-08-03T21:50:46Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_TPYiuQ4HUWBZAccvoSjOBveL2npL1JQQEmYacZYk.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "sis_course_id": null,
+      "integration_id": null,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    },
+    {
+      "id": 68,
+      "name": "COS 436 - Parallel and Distributed Computing",
+      "account_id": 4,
+      "uuid": "VPFwjmHhFRzTV6A85zigXttzCkoYxYQcWm7t5nfs",
+      "start_at": "2020-08-19T04:00:00Z",
+      "grading_standard_id": 0,
+      "is_public": false,
+      "created_at": "2020-08-19T14:03:40Z",
+      "course_code": "COS 436",
+      "default_view": "modules",
+      "root_account_id": 1,
+      "enrollment_term_id": 9,
+      "license": "cc_by_sa",
+      "grade_passback_setting": null,
+      "end_at": "2020-12-04T05:00:00Z",
+      "public_syllabus": false,
+      "public_syllabus_to_auth": false,
+      "storage_quota_mb": 500,
+      "is_public_to_auth_users": false,
+      "term": {
+        "id": 9,
+        "name": "Fall 2020",
+        "start_at": null,
+        "end_at": "2020-12-11T05:00:00Z",
+        "created_at": "2020-08-03T21:50:46Z",
+        "workflow_state": "active",
+        "grading_period_group_id": null
+      },
+      "apply_assignment_group_weights": true,
+      "calendar": {
+        "ics": "https://canvas.cse.taylor.edu/feeds/calendars/course_VPFwjmHhFRzTV6A85zigXttzCkoYxYQcWm7t5nfs.ics"
+      },
+      "time_zone": "America/Indiana/Indianapolis",
+      "blueprint": false,
+      "sis_course_id": null,
+      "integration_id": null,
+      "enrollments": [
+        {
+          "type": "teacher",
+          "role": "TeacherEnrollment",
+          "role_id": 4,
+          "user_id": 19,
+          "enrollment_state": "active",
+          "limit_privileges_to_course_section": false
+        }
+      ],
+      "hide_final_grades": false,
+      "workflow_state": "available",
+      "restrict_enrollments_to_course_dates": false,
+      "overridden_course_visibility": ""
+    }
+  ]
+}
