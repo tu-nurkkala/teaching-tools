@@ -4,4 +4,4 @@
 // Until then, use this. Details at https://blog.logrocket.com/es-modules-in-node-today/
 
 require = require('esm')(module);
-require("../src/cli").cli(process.argv);
+require("../src/cli").cli();
