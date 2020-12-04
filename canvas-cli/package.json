@@ -21,7 +21,11 @@
     "lodash": "^4.17.20",
     "lowdb": "^1.0.0",
     "luxon": "^1.25.0",
+    "node-emoji": "^1.10.0",
+    "parse-link-header": "^1.0.1",
     "sprintf-js": "^1.1.2",
+    "table": "^6.0.4",
+    "turndown": "^7.0.0",
     "untildify": "^4.0.0"
   },
   "devDependencies": {
