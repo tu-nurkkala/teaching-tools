@@ -1,19 +1,22 @@
 {
   "current": {
-    "account_id": 1,
     "term": {
       "id": 9,
       "name": "Fall 2020"
     },
     "course": {
       "id": 65,
-      "name": "COS 243 - Multi-tier Web Application Development"
+      "name": "COS 243 - Multi-tier Web Application Development",
+      "course_code": "COS 243"
     },
     "assignment": {
-      "id": 1863,
-      "name": "UI Framework Comparison",
-      "due_at": "2020-11-10T04:59:59Z",
-      "needs_grading_count": 16
+      "id": 1635,
+      "name": "Callbacks Assignment (Upland Weather)",
+      "due_at": "2020-09-01T03:59:59Z",
+      "needs_grading_count": 0
     }
+  },
+  "canvas": {
+    "account_id": 1
   }
 }

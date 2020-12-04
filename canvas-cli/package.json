@@ -21,7 +21,8 @@
     "lodash": "^4.17.20",
     "lowdb": "^1.0.0",
     "luxon": "^1.25.0",
-    "sprintf-js": "^1.1.2"
+    "sprintf-js": "^1.1.2",
+    "untildify": "^4.0.0"
   },
   "devDependencies": {
     "prettier": "^2.2.1"

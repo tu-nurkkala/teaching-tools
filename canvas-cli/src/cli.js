@@ -6,18 +6,26 @@ import { sortBy, sortedUniqBy } from "lodash";
 import chalk from "chalk";
 import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
+import untildify from "untildify";
+import { dirname } from "path";
+import { mkdirSync, createWriteStream } from "fs";
+
+import stream from "stream";
+import { promisify } from "util";
+const pipeline = promisify(stream.pipeline);
 
 import { config } from "dotenv";
 config();
 
 import low from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
+import { join } from "path";
 
 const adapter = new FileSync("db.json");
 const db = low(adapter);
 
 db.defaults({
-  current: { account_id: 1 },
+  canvas: { account_id: 1 },
 }).write();
 
 const api_client = got.extend({
@@ -40,16 +48,39 @@ function getCourses() {
 }
 
 function getEnrollmentTerms() {
-  const accountId = db.get("current.account_id").value();
+  const accountId = db.get("canvas.account_id").value();
   return api_client
     .get(`accounts/${accountId}/terms`)
     .then((result) => sortBy(result.body.enrollment_terms, (term) => -term.id));
 }
 
+function getCurrentCourseId() {
+  return db.get("current.course.id").value();
+}
+
+function getCurrentAssignmentId() {
+  return db.get("current.assignment.id").value();
+}
+
 function getAssignments() {
-  const courseId = db.get("current.course.id").value();
+  const courseId = getCurrentCourseId();
   return api_client
     .get(`courses/${courseId}/assignments`)
+    .then((result) => result.body);
+}
+
+function getSubmissions() {
+  const segments = [
+    "courses",
+    getCurrentCourseId(),
+    "assignments",
+    getCurrentAssignmentId(),
+    "submissions",
+  ];
+  return api_client
+    .get(segments.join("/"), {
+      searchParams: { include: "user" },
+    })
     .then((result) => result.body);
 }
 
@@ -89,12 +120,57 @@ function formatAssignment(assignment) {
   return strings.join(" ");
 }
 
+function downloadSubmission(url, path) {
+  const absPath = untildify(path);
+  const dirName = dirname(absPath);
+  console.log("DIR", dirName);
+  mkdirSync(dirName, { recursive: true });
+  console.log(`DOWNLOAD ${url} to ${absPath}`);
+  return pipeline(got.stream(url), createWriteStream(absPath));
+}
+
+function sanitizeString(str) {
+  return str
+    .replace(/[^-_.a-z0-9\s]/gi, "")
+    .replace(/[\s_-]+/g, "-")
+    .toLowerCase();
+}
+
 export function cli() {
   program.version(version);
 
   showCurrentState();
 
   program.command("current").description("Show current settings");
+
+  const listCmd = program.command("list").description("List things");
+
+  listCmd
+    .command("submissions")
+    .description("List submissions")
+    .action(async () => {
+      const submissions = await getSubmissions();
+      for (const sub of submissions) {
+        console.log(sub.id, sub.submitted_at, sub.user.name);
+        switch (sub.submission_type) {
+          case "online_upload":
+            for (const attachment of sub.attachments) {
+              console.log("ATTACHMENT", attachment);
+              const path = join(
+                "~/Scratch",
+                sanitizeString(db.get("current.course.course_code").value()),
+                sanitizeString(db.get("current.assignment.name").value()),
+                sanitizeString(sub.user.sortable_name),
+                sanitizeString(attachment.display_name)
+              );
+              await downloadSubmission(attachment.url, path);
+            }
+            break;
+          default:
+            console.error(chalk.red(`CAN'T HANDLE ${sub.submission_type}`));
+        }
+      }
+    });
 
   const setCmd = program.command("set").description("Set current values");
 
@@ -182,6 +258,7 @@ export function cli() {
             .set("current.course", {
               id: answer.course.id,
               name: answer.course.name,
+              course_code: answer.course.course_code,
             })
             .write()
         )
