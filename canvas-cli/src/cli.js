@@ -21,6 +21,16 @@ import Debug from "debug";
 import prettyBytes from "pretty-bytes";
 import pluralize from "pluralize";
 import childProcess from "child_process";
+import boxen from "boxen";
+import ora from "ora";
+
+const prettyError = require("pretty-error").start();
+prettyError.appendStyle({
+  "pretty-error > trace > item": {
+    marginBottom: 0,
+    bullet: '"<red>-</red>"',
+  },
+});
 
 const debug = Debug("cli");
 
@@ -85,8 +95,11 @@ function getAssignments() {
   return api_client.paginate.all(`courses/${courseId}/assignments`);
 }
 
-function getStudents(courseId) {
-  return api_client.paginate.all(`courses/${courseId}/students`);
+async function getStudents(courseId = getCurrentCourseId()) {
+  const spinner = ora('Retrieving students').start();
+  const rtn = await api_client.paginate.all(`courses/${courseId}/students`);
+  spinner.succeed('Complete');
+  return rtn;
 }
 
 function getOneStudent(id) {
@@ -118,9 +131,12 @@ function submissionUrl(userId) {
   ].join("/");
 }
 
-function gradeSubmission(userId, score) {
-  const maxScore = db.get("current.assignment.points_possible").value();
+function currentMaxScore() {
+  return db.get("current.assignment.points_possible").value();
+}
 
+function gradeSubmission(userId, score) {
+  const maxScore = currentMaxScore();
   if (score < 0 || score > maxScore) {
     throw Error(`Invalid score [0 <= ${score} <= ${maxScore}]`);
   }
@@ -315,11 +331,9 @@ async function downloadAndProcessSubmission(url, contentType, absPath) {
           segments.push(`${prettyBytes(stats.bytes.skipped)} skipped`);
         }
         const report = ["\t "] + segments.join(" | ");
-        if (stats.bytes.skipped || stats.files.skipped) {
-          console.log(chalk.red(report));
-        } else {
-          console.log(chalk.green(report));
-        }
+        const color =
+          stats.bytes.skipped || stats.files.skipped ? "red" : "teal";
+        console.log(chalk.keyword(color)(report));
       } catch (err) {
         console.log(chalk.red("Problem extracting zip file:", err));
       }
@@ -340,12 +354,26 @@ function sanitizeString(str) {
     .toLowerCase();
 }
 
+function fatal(message) {
+  console.log(
+    boxen(chalk.red("ERROR -", message), {
+      borderColor: "red",
+      borderStyle: "round",
+      padding: { left: 1, right: 1 },
+    })
+  );
+  process.exit(1);
+}
+
 export function cli() {
   program.version(version);
 
   showCurrentState();
 
-  program.command("current").description("Show current settings");
+  program
+    .command("current")
+    .alias("status")
+    .description("Show current settings");
 
   const listCmd = program.command("list").description("List things");
 
@@ -380,7 +408,7 @@ export function cli() {
       console.log(table(rows, { singleLine: true }));
     });
 
-  const showCmd = program.command("show").description("Show things");
+  const showCmd = program.command("show").description("Show details");
 
   showCmd
     .command("submission <userId>")
@@ -410,9 +438,10 @@ export function cli() {
 
   findCmd
     .command("student <fuzzy>")
+    .alias("search")
     .description("Find student using fuzzy match")
     .action(async (fuzzy) => {
-      const students = await getStudents(getCurrentCourseId());
+      const students = await getStudents();
       const fuse = new Fuse(students, {
         includeScore: true,
         ignoreLocation: true,
@@ -425,25 +454,67 @@ export function cli() {
     });
 
   program
-    .command("grade <userId> <score>")
-    .description("Grade submission")
-    .action(async (userId, score) => {
-      const student = db.get(`current.course.students.${userId}`).value();
-      if (!student) {
-        throw Error(`No student with id ${userId}`);
+    .command("grade [userId] [score]")
+    .description("Grade submission", {
+      userId: "user ID of student; if missing, select from list",
+      score: "score to assign; required with userId",
+    })
+    .option("--no-show-editor", "Don't open editor")
+    .action(async (userId, score, options) => {
+      // Choose a student to grade.
+      let selectedStudent = null;
+
+      if (!userId) {
+        // No userID specified; offer a choice.
+        const allStudents = await getStudents();
+        await inquirer
+          .prompt([
+            {
+              type: "list",
+              name: "student",
+              message: `Choose a student (${allStudents.length} available)`,
+              pageSize: 20,
+              choices: () =>
+                allStudents.map((s) => ({
+                  name: s.name,
+                  value: s,
+                })),
+            },
+          ])
+          .then((answer) => {
+            selectedStudent = answer.s;
+          });
+      } else {
+        // UserID given on command line.
+        if (!score) {
+          fatal("Specific `userId` also requires `score`.");
+        }
+
+        selectedStudent = db.get(`current.course.students.${userId}`).value();
+        if (!selectedStudent) {
+          fatal(`No student with id ${userId}`);
+        }
       }
 
-      const result = childProcess.spawnSync(
-        "code",
-        ["--wait", submissionDir(student)],
-        {
-          stdio: "ignore",
-        }
-      );
-      debug("Editor result %O", result);
+      console.log(chalk.yellow(`Grade ${selectedStudent.name}`));
 
-      // const result = await gradeSubmission(userId, score);
-      // console.log(student.id, student.name, result.score, result.graded_at);
+      if (options.showEditor) {
+        const result = childProcess.spawnSync(
+          "code",
+          ["--wait", submissionDir(selectedStudent)],
+          { stdio: "ignore" }
+        );
+        debug("Editor result %O", result);
+      }
+
+      const result = await gradeSubmission(userId, score);
+      console.log(
+        chalk.green(
+          `${selectedStudent.name} scores ${
+            result.score
+          } of ${currentMaxScore()}`
+        )
+      );
     });
 
   program
@@ -512,7 +583,10 @@ export function cli() {
       }
     });
 
-  const setCmd = program.command("set").description("Set current values");
+  const setCmd = program
+    .command("set")
+    .alias("choose")
+    .description("Set current values");
 
   setCmd
     .command("assignment [id]")

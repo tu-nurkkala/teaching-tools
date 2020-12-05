@@ -11,6 +11,7 @@
     "canvas-cli": "bin/canvas-cli"
   },
   "dependencies": {
+    "boxen": "^4.2.0",
     "chalk": "^4.1.0",
     "commander": "^6.2.0",
     "debug": "^4.3.1",
@@ -27,9 +28,11 @@
     "node-emoji": "^1.10.0",
     "open": "^7.3.0",
     "open-editor": "^2.0.1",
+    "ora": "^5.1.0",
     "parse-link-header": "^1.0.1",
     "pluralize": "^8.0.0",
     "pretty-bytes": "^5.4.1",
+    "pretty-error": "^2.1.2",
     "qs": "^6.9.4",
     "sprintf-js": "^1.1.2",
     "table": "^6.0.4",
