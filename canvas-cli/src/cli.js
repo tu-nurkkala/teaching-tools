@@ -10,6 +10,8 @@ import untildify from "untildify";
 import { mkdirSync, createWriteStream, writeFileSync } from "fs";
 import parseLinkHeader from "parse-link-header";
 import { table } from "table";
+import queryString from "qs";
+import Fuse from "fuse.js";
 
 import TurndownService from "turndown";
 const turndownService = new TurndownService({
@@ -75,8 +77,64 @@ function getAssignments() {
   return api_client.paginate.all(`courses/${courseId}/assignments`);
 }
 
+function getStudents(courseId) {
+  return api_client.paginate.all(`courses/${courseId}/students`);
+}
+
+function getOneStudent(id) {
+  const courseId = getCurrentCourseId();
+  return api_client
+    .get(`courses/${courseId}/users/${id}`)
+    .then((response) => response.body);
+}
+
+function getOneAssignment(id) {
+  const courseId = getCurrentCourseId();
+  return api_client
+    .get(`courses/${courseId}/assignments/${id}`)
+    .then((response) => response.body);
+}
+
 function getAssignmentGroups(courseId) {
   return api_client.paginate.all(`courses/${courseId}/assignment_groups`);
+}
+
+function submissionUrl(userId) {
+  return [
+    "courses",
+    getCurrentCourseId(),
+    "assignments",
+    getCurrentAssignmentId(),
+    "submissions",
+    userId,
+  ].join("/");
+}
+
+function gradeSubmission(userId, score) {
+  const maxScore = db.get("current.assignment.points_possible").value();
+
+  if (score < 0 || score > maxScore) {
+    throw Error(`Invalid score [0 <= ${score} <= ${maxScore}]`);
+  }
+
+  return api_client
+    .put(submissionUrl(userId), {
+      searchParams: queryString.stringify({
+        submission: { posted_grade: score },
+      }),
+    })
+    .then((response) => response.body);
+}
+
+function getOneSubmission(userId) {
+  return api_client
+    .get(submissionUrl(userId), {
+      searchParams: queryString.stringify(
+        { include: ["user", "course"] },
+        { arrayFormat: "brackets" }
+      ),
+    })
+    .then((response) => response.body);
 }
 
 function getSubmissions() {
@@ -87,7 +145,7 @@ function getSubmissions() {
     getCurrentAssignmentId(),
     "submissions",
   ];
-  const searchParamInclude = { include: "user" };
+  const searchParamInclude = { "include[]": "user" };
   return api_client.paginate.all(segments.join("/"), {
     searchParams: searchParamInclude,
     pagination: {
@@ -202,14 +260,6 @@ export function cli() {
 
   program.command("current").description("Show current settings");
 
-  program
-    .command("test")
-    .description("Dummy command for development testing")
-    .action(async () => {
-      const response = await paginateAssignments();
-      console.log("RESPONSE", response);
-    });
-
   const listCmd = program.command("list").description("List things");
 
   listCmd
@@ -217,7 +267,7 @@ export function cli() {
     .description("List assignments")
     .action(async () => {
       const groups = db.get("current.course.assignment_groups").value();
-      const assignments = await getAssignments();
+      const assignments = sortBy(await getAssignments(), (a) => a.due_at);
       const rows = assignments.map((a) => [
         a.id,
         a.needs_grading_count
@@ -229,31 +279,96 @@ export function cli() {
         isoDateTimeToDate(a.due_at),
         formatSubmissionTypes(a.submission_types),
       ]);
-      const sortedRows = sortBy(rows, (row) => row.id);
-      console.log(table(sortedRows, { singleLine: true }));
+      console.log(table(rows, { singleLine: true }));
     });
 
-  const downloadCmd = program
-    .command("download")
-    .description("Download things");
+  listCmd
+    .command("students")
+    .description("List students")
+    .action(async () => {
+      const students = sortBy(await getStudents(getCurrentCourseId()), (s) =>
+        s.sortable_name.toLowerCase()
+      );
+      const rows = students.map((s) => [s.id, s.name]);
+      console.log(table(rows, { singleLine: true }));
+    });
 
-  downloadCmd
-    .command("submissions")
+  const showCmd = program.command("show").description("Show things");
+
+  showCmd
+    .command("submission <userId>")
+    .description("Show details of submission from user <userId>")
+    .action(async (userId) => {
+      const submission = await getOneSubmission(userId);
+      console.log(submission);
+    });
+
+  showCmd
+    .command("assignment <id>")
+    .description("Show details of assignment <id>")
+    .action(async (id) => {
+      const assignment = await getOneAssignment(id);
+      console.log(assignment);
+    });
+
+  showCmd
+    .command("student <id>")
+    .description("Show details of student <id>")
+    .action(async (id) => {
+      const student = await getOneStudent(id);
+      console.log(student);
+    });
+
+  const findCmd = program.command("find").description("Find things");
+
+  findCmd
+    .command("student <fuzzy>")
+    .description("Find student using fuzzy match")
+    .action(async (fuzzy) => {
+      const students = await getStudents(getCurrentCourseId());
+      const fuse = new Fuse(students, {
+        includeScore: true,
+        ignoreLocation: true,
+        threshold: 0.01,
+        keys: ["name", "sortable_name", "short_name", "login_id"],
+      });
+      const result = fuse.search(fuzzy);
+      const rows = result.map((elt) => [elt.item.id, elt.score, elt.item.name]);
+      console.log(table(rows, { singleLine: true }));
+    });
+
+  program
+    .command("grade <userId> <score>")
+    .description("Grade submission")
+    .action(async (userId, score) => {
+      const student = db.get(`current.course.students.${userId}`).value();
+      if (!student) {
+        throw Error(`No student with id ${userId}`);
+      }
+      const result = await gradeSubmission(userId, score);
+      console.log(student.id, student.name, result.score, result.graded_at);
+    });
+
+  program
+    .command("download")
     .description("Download submissions")
     .action(async () => {
       const submissions = await getSubmissions();
       for (const sub of submissions) {
-        if (sub.user.name === "Test Student") {
-          continue;
-        }
         console.log(
           sub.id,
           sub.user.name,
+          `(${sub.user.id})`,
           formatSubmissionType(sub.submission_type)
         );
-        if (sub.workflow_state === "graded") {
-          console.log("\t", chalk.yellow("Already graded"));
-          continue;
+
+        switch (sub.workflow_state) {
+          case "graded":
+            console.log("\t", chalk.green("Already graded"));
+            continue;
+          case "unsubmitted":
+            console.log("\t", chalk.red("Not submitted"));
+            continue;
         }
 
         switch (sub.submission_type) {
@@ -293,7 +408,9 @@ export function cli() {
             console.log(chalk.green("Nothing to do"));
             break;
           default:
-            console.error(chalk.red(`CAN'T HANDLE ${sub.submission_type}`));
+            console.error(
+              chalk.red(`Can't handle submission type '${sub.submission_type}'`)
+            );
         }
       }
     });
@@ -331,6 +448,7 @@ export function cli() {
         due_at: selectedAssignment.due_at,
         needs_grading_count: selectedAssignment.needs_grading_count,
         submission_types: selectedAssignment.submission_types,
+        points_possible: selectedAssignment.points_possible,
       }).write();
       console.log(
         chalk.green(`Current assignment now '${selectedAssignment.name}'`)
@@ -385,12 +503,14 @@ export function cli() {
         },
       ]);
       const groups = await getAssignmentGroups(answer.course.id);
+      const students = await getStudents(answer.course.id);
 
       db.set("current.course", {
         id: answer.course.id,
         name: answer.course.name,
         course_code: answer.course.course_code,
         assignment_groups: keyBy(groups, (elt) => elt.id),
+        students: keyBy(students, (elt) => elt.id),
       }).write();
     });
 
