@@ -1,4 +1,7 @@
 import { version } from "../package.json";
+import { config } from "dotenv";
+config();
+
 import { program } from "commander";
 import got from "got";
 import inquirer from "inquirer";
@@ -7,7 +10,7 @@ import chalk from "chalk";
 import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
 import untildify from "untildify";
-import { mkdirSync, createWriteStream, writeFileSync } from "fs";
+import { mkdirSync, readdirSync, createWriteStream, writeFileSync } from "fs";
 import { dirname } from "path";
 import parseLinkHeader from "parse-link-header";
 import { table } from "table";
@@ -17,6 +20,7 @@ import extractZip from "extract-zip";
 import Debug from "debug";
 import prettyBytes from "pretty-bytes";
 import pluralize from "pluralize";
+import childProcess from "child_process";
 
 const debug = Debug("cli");
 
@@ -28,9 +32,6 @@ const turndownService = new TurndownService({
 import stream from "stream";
 import { promisify } from "util";
 const pipeline = promisify(stream.pipeline);
-
-import { config } from "dotenv";
-config();
 
 import low from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
@@ -235,7 +236,7 @@ function showCurrentState() {
   showElement("Assignment", current.assignment);
 }
 
-function downloadPath(user, fileName) {
+function submissionDir(user) {
   const absDirPath = untildify(
     join(
       "~/Scratch",
@@ -245,7 +246,11 @@ function downloadPath(user, fileName) {
     )
   );
   mkdirSync(absDirPath, { recursive: true });
+  return absDirPath;
+}
 
+function submissionPath(user, fileName) {
+  const absDirPath = submissionDir(user);
   return join(absDirPath, fileName);
 }
 
@@ -427,8 +432,18 @@ export function cli() {
       if (!student) {
         throw Error(`No student with id ${userId}`);
       }
-      const result = await gradeSubmission(userId, score);
-      console.log(student.id, student.name, result.score, result.graded_at);
+
+      const result = childProcess.spawnSync(
+        "code",
+        ["--wait", submissionDir(student)],
+        {
+          stdio: "ignore",
+        }
+      );
+      debug("Editor result %O", result);
+
+      // const result = await gradeSubmission(userId, score);
+      // console.log(student.id, student.name, result.score, result.graded_at);
     });
 
   program
@@ -455,9 +470,12 @@ export function cli() {
 
         switch (sub.submission_type) {
           case "online_text_entry":
-            writeFileSync(downloadPath(sub.user, "submission.html"), sub.body);
             writeFileSync(
-              downloadPath(sub.user, "submission.txt"),
+              submissionPath(sub.user, "submission.html"),
+              sub.body
+            );
+            writeFileSync(
+              submissionPath(sub.user, "submission.txt"),
               turndownService.turndown(sub.body)
             );
             break;
@@ -475,12 +493,12 @@ export function cli() {
               await downloadAndProcessSubmission(
                 attachment.url,
                 attachment["content-type"],
-                downloadPath(sub.user, attachment.display_name)
+                submissionPath(sub.user, attachment.display_name)
               );
             }
             break;
           case "online_url":
-            writeFileSync(downloadPath(sub.user, "url.txt"), sub.url + "\n");
+            writeFileSync(submissionPath(sub.user, "url.txt"), sub.url + "\n");
             console.log("\t", chalk.green(sub.url));
             break;
           case "online_quiz":
