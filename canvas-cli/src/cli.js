@@ -8,10 +8,17 @@ import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
 import untildify from "untildify";
 import { mkdirSync, createWriteStream, writeFileSync } from "fs";
+import { dirname } from "path";
 import parseLinkHeader from "parse-link-header";
 import { table } from "table";
 import queryString from "qs";
 import Fuse from "fuse.js";
+import extractZip from "extract-zip";
+import Debug from "debug";
+import prettyBytes from "pretty-bytes";
+import pluralize from "pluralize";
+
+const debug = Debug("cli");
 
 import TurndownService from "turndown";
 const turndownService = new TurndownService({
@@ -242,8 +249,83 @@ function downloadPath(user, fileName) {
   return join(absDirPath, fileName);
 }
 
-function downloadSubmission(url, contentType, absPath) {
+function downloadSubmission(url, absPath) {
   return pipeline(got.stream(url), createWriteStream(absPath));
+}
+
+async function downloadAndProcessSubmission(url, contentType, absPath) {
+  try {
+    await downloadSubmission(url, absPath);
+  } catch (err) {
+    console.log(chalk.red("Problem with download:", err));
+  }
+
+  switch (contentType) {
+    case "application/zip":
+    case "application/x-zip-compressed":
+      console.log("\t", chalk.cyan("Zip file"));
+      try {
+        const stats = {
+          files: { extracted: 0, skipped: 0 },
+          bytes: { extracted: 0, skipped: 0 },
+        };
+        await extractZip(absPath, {
+          dir: dirname(absPath),
+          onEntry: (entry, _zipFile) => {
+            debug("Zip entry %O", entry);
+            if (entry.fileName.includes("node_modules/")) {
+              stats.files.skipped += 1;
+              stats.bytes.skipped += entry.uncompressedSize;
+            } else {
+              stats.files.extracted += 1;
+              stats.bytes.extracted += entry.uncompressedSize;
+              console.log(
+                "\t",
+                chalk.green(`File: ${entry.fileName}`),
+                chalk.yellow(`(${prettyBytes(entry.uncompressedSize)})`)
+              );
+            }
+          },
+        });
+        const segments = [];
+        if (stats.files.skipped === 0) {
+          segments.push(
+            `${stats.files.extracted} ${pluralize(
+              "file",
+              stats.files.extracted
+            )}`
+          );
+        } else {
+          const totalFiles = stats.files.skipped + stats.files.extracted;
+          segments.push(`${stats.files.extracted}/${totalFiles}`);
+          segments.push(`${stats.files.skipped} skipped`);
+        }
+        if (stats.bytes.skipped === 0) {
+          segments.push(`${prettyBytes(stats.bytes.extracted)} bytes`);
+        } else {
+          const totalBytes = stats.bytes.skipped + stats.bytes.extracted;
+          segments.push(
+            `${prettyBytes(stats.bytes.extracted)}/${prettyBytes(totalBytes)}`
+          );
+          segments.push(`${prettyBytes(stats.bytes.skipped)} skipped`);
+        }
+        const report = ["\t "] + segments.join(" | ");
+        if (stats.bytes.skipped || stats.files.skipped) {
+          console.log(chalk.red(report));
+        } else {
+          console.log(chalk.green(report));
+        }
+      } catch (err) {
+        console.log(chalk.red("Problem extracting zip file:", err));
+      }
+      break;
+    case "application/x-tar":
+      console.log("\t", chalk.cyan("Tar file"));
+      break;
+    default:
+      console.log("\t", chalk.green("No file processing"));
+      break;
+  }
 }
 
 function sanitizeString(str) {
@@ -373,6 +455,7 @@ export function cli() {
 
         switch (sub.submission_type) {
           case "online_text_entry":
+            writeFileSync(downloadPath(sub.user, "submission.html"), sub.body);
             writeFileSync(
               downloadPath(sub.user, "submission.txt"),
               turndownService.turndown(sub.body)
@@ -389,15 +472,11 @@ export function cli() {
                 chalk.green(attachment.display_name),
                 attachment["content-type"]
               );
-              try {
-                await downloadSubmission(
-                  attachment.url,
-                  attachment["content-type"],
-                  downloadPath(sub.user, attachment.display_name)
-                );
-              } catch (err) {
-                console.log(chalk.red(`Problem with download: ${err}`));
-              }
+              await downloadAndProcessSubmission(
+                attachment.url,
+                attachment["content-type"],
+                downloadPath(sub.user, attachment.display_name)
+              );
             }
             break;
           case "online_url":
