@@ -10,7 +10,7 @@ import chalk from "chalk";
 import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
 import untildify from "untildify";
-import { mkdirSync, readdirSync, createWriteStream, writeFileSync } from "fs";
+import { mkdirSync, statSync, createWriteStream, writeFileSync } from "fs";
 import { dirname } from "path";
 import parseLinkHeader from "parse-link-header";
 import { table } from "table";
@@ -324,17 +324,21 @@ function downloadSubmission(url, absPath) {
   return pipeline(got.stream(url), createWriteStream(absPath));
 }
 
-async function downloadAndProcessSubmission(submission, attachment) {
+async function downloadAndProcessOneAttachment(submission, attachment) {
   const absPath = submissionPath(submission.user, attachment.display_name);
   const contentType = attachment["content-type"];
 
   try {
     await downloadSubmission(attachment.url, absPath);
   } catch (err) {
-    fatal(`Problem with download: ${err}`);
+    warning(`Problem with download: ${err}`);
   }
 
-  const allFileNames = [];
+  const allFiles = [];
+
+  function addFile(name, size) {
+    allFiles.push({ name, contentType, size });
+  }
 
   switch (contentType) {
     case "application/zip":
@@ -355,7 +359,7 @@ async function downloadAndProcessSubmission(submission, attachment) {
             } else {
               stats.files.extracted += 1;
               stats.bytes.extracted += entry.uncompressedSize;
-              allFileNames.push(entry.fileName);
+              addFile(entry.fileName, entry.uncompressedSize);
               console.log(
                 "\t",
                 chalk.green(`File: ${entry.fileName}`),
@@ -399,15 +403,22 @@ async function downloadAndProcessSubmission(submission, attachment) {
       console.log("\t", chalk.cyan("Tar file"));
       break;
 
+    case "application/json":
+    case "text/javascript":
+      addFile(attachment.display_name, attachment.size);
+      console.log("\t", chalk.green("No processing required"));
+      break;
+
     default:
-      allFileNames.push(attachment.display_name);
-      console.log("\t", chalk.green("No file processing"));
+      warning(
+        `Can't process ${attachment.display_name} (${attachment["content-type"]})`
+      );
       break;
   }
 
   db.set(
-    `current.course.students.${submission.user.id}.fileNames`,
-    allFileNames
+    `current.course.students.${submission.user.id}.files`,
+    allFiles
   ).write();
 }
 
@@ -421,25 +432,31 @@ function showEditor(student) {
 }
 
 async function showPager(student) {
-  const { fileName } = await inquirer.prompt([
+  const allFiles = student.files;
+
+  if (!allFiles || allFiles.length === 0) {
+    console.log("\t", chalk.yellow(`No files for this student`));
+    return;
+  }
+
+  const { file } = await inquirer.prompt([
     {
       type: "list",
       message: "Choose a file to page",
-      name: "fileName",
+      name: "file",
       choices: () =>
-        student.fileNames.map((fn) => ({
-          name: fn,
-          value: fn,
+        allFiles.map((file) => ({
+          name: `${file.name} (${prettyBytes(file.size)})`,
+          value: file,
         })),
     },
   ]);
 
-  console.log("FILE NAME", fileName);
-  const result = childProcess.spawnSync(
-    "/bin/cat",
-    [submissionPath(student, fileName)],
-  );
-  console.log("RESULT", result.stdout.toString());
+  const filePath = submissionPath(student, file.name);
+
+  childProcess.spawnSync("less", [filePath], {
+    stdio: "inherit",
+  });
 }
 
 function askForScore(maxScore) {
@@ -492,15 +509,21 @@ function sanitizeString(str) {
     .toLowerCase();
 }
 
+function makeBox(color, prefix, message) {
+  return boxen(chalk.keyword(color)(`${prefix} -`, message), {
+    borderColor: color,
+    borderStyle: "round",
+    padding: { left: 1, right: 1 },
+  });
+}
+
 function fatal(message) {
-  console.log(
-    boxen(chalk.red("ERROR -", message), {
-      borderColor: "red",
-      borderStyle: "round",
-      padding: { left: 1, right: 1 },
-    })
-  );
+  console.log(makeBox("red", "ERROR", message));
   process.exit(1);
+}
+
+function warning(message) {
+  console.log(makeBox("yellow", "WARNING", message));
 }
 
 export function cli() {
@@ -597,7 +620,7 @@ export function cli() {
       userId: "user ID of student; if missing, select from list",
       score: "score to assign; required with userId",
     })
-    .option("--no-editor", "Don't open editor")
+    .option("--editor", "Open files in editor (else pager)")
     .action(async (userId, score, options) => {
       // Choose a student to grade.
       const maxScore = currentMaxScore();
@@ -613,8 +636,10 @@ export function cli() {
           fatal(`No cached student with id ${userId}`);
         }
 
-        if (options.showEditor) {
+        if (options.editor) {
           showEditor(student);
+        } else {
+          showPager(student);
         }
 
         await confirmScore(student, score, maxScore);
@@ -663,10 +688,10 @@ export function cli() {
           ]);
           const student = answer.student;
 
-          await showPager(student);
-
           if (options.editor) {
             showEditor(student);
+          } else {
+            await showPager(student);
           }
 
           const score = await askForScore(maxScore);
@@ -733,7 +758,7 @@ export function cli() {
                 chalk.green(attachment.display_name),
                 attachment["content-type"]
               );
-              await downloadAndProcessSubmission(sub, attachment);
+              await downloadAndProcessOneAttachment(sub, attachment);
             }
             break;
           case "online_url":
