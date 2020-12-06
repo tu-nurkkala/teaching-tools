@@ -412,6 +412,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
 
     case "application/json":
     case "text/javascript":
+    case "application/pdf":
       addFile(attachment.display_name, attachment.size);
       console.log("\t", chalk.green("No processing required"));
       break;
@@ -446,22 +447,27 @@ async function showPager(student) {
     return;
   }
 
-  const { file } = await inquirer.prompt([
-    {
-      type: "list",
-      message: "Choose a file to page",
-      name: "file",
-      choices: () =>
-        allFiles.map((file) => ({
-          name: `${file.name} (${prettyBytes(file.size)})`,
-          value: file,
-        })),
-    },
-  ]);
+  let filePaths = [];
+  if (allFiles.length > 1) {
+    const { files } = await inquirer.prompt([
+      {
+        type: "checkbox",
+        message: "Choose files to inspect",
+        pageSize: 20,
+        name: "files",
+        choices: () =>
+          allFiles.map((file) => ({
+            name: `${file.name} (${prettyBytes(file.size)})`,
+            value: file,
+          })),
+      },
+    ]);
+    filePaths = files.map((f) => submissionPath(student, f.name));
+  } else {
+    filePaths = [submissionPath(student, allFiles[0].name)];
+  }
 
-  const filePath = submissionPath(student, file.name);
-
-  childProcess.spawnSync("less", [filePath], {
+  childProcess.spawnSync("less", filePaths, {
     stdio: "inherit",
   });
 }
@@ -692,16 +698,30 @@ export function cli() {
           })
         );
 
+        function formatStudentName(student) {
+          let fileDetails = chalk.red("No files");
+          if (student.files && student.files.length > 0) {
+            fileDetails = chalk.green(`${student.files.length} files`);
+          }
+          return [
+            student.name,
+            chalk.yellow(student.submission.workflow_state),
+            fileDetails,
+          ].join(" ");
+        }
+
         while (size(remainingStudents) > 0) {
           const answer = await inquirer.prompt([
             {
               type: "list",
               name: "student",
-              message: "Choose a student (?? available)",
+              message: `Choose a student (${size(
+                remainingStudents
+              )} available)`,
               pageSize: 20,
               choices: () =>
                 remainingStudents.map((s) => ({
-                  name: `${s.name} ${s.submission.workflow_state}`,
+                  name: formatStudentName(s),
                   value: s,
                 })),
             },
