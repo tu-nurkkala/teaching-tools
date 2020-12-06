@@ -320,7 +320,7 @@ function submissionPath(user, fileName) {
   return join(absDirPath, fileName);
 }
 
-function downloadSubmission(url, absPath) {
+function downloadOneAttachment(url, absPath) {
   return pipeline(got.stream(url), createWriteStream(absPath));
 }
 
@@ -329,7 +329,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
   const contentType = attachment["content-type"];
 
   try {
-    await downloadSubmission(attachment.url, absPath);
+    await downloadOneAttachment(attachment.url, absPath);
   } catch (err) {
     warning(`Problem with download: ${err}`);
   }
@@ -337,7 +337,19 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
   const allFiles = [];
 
   function addFile(name, size) {
-    allFiles.push({ name, contentType, size });
+    const segments = ["\t"];
+    if (name.endsWith("/")) {
+      // According to the yauzl docs, directories end with a slash.
+      // Don't add them.
+      segments.push(chalk.yellow(`${name} - skipping directory`));
+    } else {
+      segments.push(
+        chalk.green(`${name}`),
+        chalk.yellow(`(${prettyBytes(size)})`)
+      );
+      allFiles.push({ name, size });
+    }
+    console.log(segments.join(" "));
   }
 
   switch (contentType) {
@@ -360,11 +372,6 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
               stats.files.extracted += 1;
               stats.bytes.extracted += entry.uncompressedSize;
               addFile(entry.fileName, entry.uncompressedSize);
-              console.log(
-                "\t",
-                chalk.green(`File: ${entry.fileName}`),
-                chalk.yellow(`(${prettyBytes(entry.uncompressedSize)})`)
-              );
             }
           },
         });
@@ -620,10 +627,28 @@ export function cli() {
       userId: "user ID of student; if missing, select from list",
       score: "score to assign; required with userId",
     })
-    .option("--editor", "Open files in editor (else pager)")
+    .option("--editor", "Open files in editor")
+    .option("--pager", "Open files in pager (default)")
     .action(async (userId, score, options) => {
-      // Choose a student to grade.
       const maxScore = currentMaxScore();
+
+      if (options.pager) {
+        if (options.editor) {
+          fatal("Can't enable both editor and pager");
+        }
+      } else {
+        if (!options.editor) {
+          options.pager = true;
+        }
+      }
+
+      function showViewer(student) {
+        if (options.editor) {
+          return showEditor(student);
+        } else if (options.pager) {
+          return showPager(student);
+        }
+      }
 
       if (userId) {
         // Grade one student.
@@ -636,12 +661,7 @@ export function cli() {
           fatal(`No cached student with id ${userId}`);
         }
 
-        if (options.editor) {
-          showEditor(student);
-        } else {
-          showPager(student);
-        }
-
+        showViewer(student);
         await confirmScore(student, score, maxScore);
       } else {
         // Grade multiple students.
@@ -688,11 +708,7 @@ export function cli() {
           ]);
           const student = answer.student;
 
-          if (options.editor) {
-            showEditor(student);
-          } else {
-            await showPager(student);
-          }
+          await showViewer(student);
 
           const score = await askForScore(maxScore);
           const confirmed = await confirmScore(student, score, maxScore);
@@ -715,7 +731,11 @@ export function cli() {
   program
     .command("download")
     .description("Download submissions")
-    .action(async () => {
+    .option(
+      "--max-size <size>",
+      "Don't get attachments larger than this (bytes)"
+    )
+    .action(async (options) => {
       const submissions = await getSubmissions();
       for (const sub of submissions) {
         console.log(
@@ -756,8 +776,23 @@ export function cli() {
               console.log(
                 "\t",
                 chalk.green(attachment.display_name),
+                chalk.yellow(prettyBytes(attachment.size)),
                 attachment["content-type"]
               );
+              if (options.maxSize) {
+                const sizeLimit = parseInt(options.maxSize);
+                if (attachment.size > sizeLimit) {
+                  console.log(
+                    "\t",
+                    chalk.yellow(
+                      `Too large [${prettyBytes(
+                        attachment.size
+                      )} > ${prettyBytes(sizeLimit)}]`
+                    )
+                  );
+                  continue;
+                }
+              }
               await downloadAndProcessOneAttachment(sub, attachment);
             }
             break;
