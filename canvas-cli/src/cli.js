@@ -5,7 +5,7 @@ config();
 import { program } from "commander";
 import got from "got";
 import inquirer from "inquirer";
-import { keyBy, pick, sortBy } from "lodash";
+import { size, keyBy, pick, sortBy } from "lodash";
 import chalk from "chalk";
 import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
@@ -54,12 +54,39 @@ db.defaults({
   canvas: { account_id: 1 },
 }).write();
 
+const apiSpinner = ora();
+
 const api_client = got.extend({
   prefixUrl: process.env["CANVAS_URL"] + "/api/v1",
   headers: {
     Authorization: `Bearer ${process.env["CANVAS_TOK"]}`,
   },
   responseType: "json",
+  hooks: {
+    beforeRequest: [
+      (options) => {
+        debug("Request options %O", options);
+        apiSpinner.start(
+          `Send ${chalk.blue(options.method)} request to ${chalk.blue(
+            options.url.href
+          )}`
+        );
+      },
+    ],
+    afterResponse: [
+      (response) => {
+        debug("Response %O", response);
+        apiSpinner.succeed();
+        return response;
+      },
+    ],
+    beforeError: [
+      (error) => {
+        console.log("ERROR", error);
+        apiSpinner.fail();
+      },
+    ],
+  },
 });
 
 function getCourses() {
@@ -95,11 +122,15 @@ function getAssignments() {
   return api_client.paginate.all(`courses/${courseId}/assignments`);
 }
 
+function getSubmissionSummary(assignmentId) {
+  const courseId = getCurrentCourseId();
+  return api_client
+    .get(`courses/${courseId}/assignments/${assignmentId}/submission_summary`)
+    .then((response) => response.body);
+}
+
 async function getStudents(courseId = getCurrentCourseId()) {
-  const spinner = ora('Retrieving students').start();
-  const rtn = await api_client.paginate.all(`courses/${courseId}/students`);
-  spinner.succeed('Complete');
-  return rtn;
+  return api_client.paginate.all(`courses/${courseId}/students`);
 }
 
 function getOneStudent(id) {
@@ -120,6 +151,18 @@ function getAssignmentGroups(courseId) {
   return api_client.paginate.all(`courses/${courseId}/assignment_groups`);
 }
 
+function currentMaxScore() {
+  return db.get("current.assignment.points_possible").value();
+}
+
+function isScoreValid(score, maxScore) {
+  return score >= 0 && score <= maxScore;
+}
+
+function invalidScoreMessage(score, maxScore) {
+  return `Invalid score [0 <= ${score} <= ${maxScore}]`;
+}
+
 function submissionUrl(userId) {
   return [
     "courses",
@@ -131,14 +174,10 @@ function submissionUrl(userId) {
   ].join("/");
 }
 
-function currentMaxScore() {
-  return db.get("current.assignment.points_possible").value();
-}
-
 function gradeSubmission(userId, score) {
   const maxScore = currentMaxScore();
-  if (score < 0 || score > maxScore) {
-    throw Error(`Invalid score [0 <= ${score} <= ${maxScore}]`);
+  if (!isScoreValid(score, maxScore)) {
+    fatal(invalidScoreMessage(score, maxScore));
   }
 
   return api_client
@@ -148,6 +187,17 @@ function gradeSubmission(userId, score) {
       }),
     })
     .then((response) => response.body);
+}
+
+function cacheSubmission(userId, sub) {
+  db.set(`current.course.students.${userId}.submission`, {
+    id: sub.id,
+    grade: sub.grade,
+    score: sub.score,
+    grader_id: sub.grader_id,
+    graded_at: sub.graded_at,
+    workflow_state: sub.workflow_state,
+  }).write();
 }
 
 function getOneSubmission(userId) {
@@ -274,12 +324,17 @@ function downloadSubmission(url, absPath) {
   return pipeline(got.stream(url), createWriteStream(absPath));
 }
 
-async function downloadAndProcessSubmission(url, contentType, absPath) {
+async function downloadAndProcessSubmission(submission, attachment) {
+  const absPath = submissionPath(submission.user, attachment.display_name);
+  const contentType = attachment["content-type"];
+
   try {
-    await downloadSubmission(url, absPath);
+    await downloadSubmission(attachment.url, absPath);
   } catch (err) {
-    console.log(chalk.red("Problem with download:", err));
+    fatal(`Problem with download: ${err}`);
   }
+
+  const allFileNames = [];
 
   switch (contentType) {
     case "application/zip":
@@ -292,7 +347,7 @@ async function downloadAndProcessSubmission(url, contentType, absPath) {
         };
         await extractZip(absPath, {
           dir: dirname(absPath),
-          onEntry: (entry, _zipFile) => {
+          onEntry: (entry) => {
             debug("Zip entry %O", entry);
             if (entry.fileName.includes("node_modules/")) {
               stats.files.skipped += 1;
@@ -300,6 +355,7 @@ async function downloadAndProcessSubmission(url, contentType, absPath) {
             } else {
               stats.files.extracted += 1;
               stats.bytes.extracted += entry.uncompressedSize;
+              allFileNames.push(entry.fileName);
               console.log(
                 "\t",
                 chalk.green(`File: ${entry.fileName}`),
@@ -338,13 +394,95 @@ async function downloadAndProcessSubmission(url, contentType, absPath) {
         console.log(chalk.red("Problem extracting zip file:", err));
       }
       break;
+
     case "application/x-tar":
       console.log("\t", chalk.cyan("Tar file"));
       break;
+
     default:
+      allFileNames.push(attachment.display_name);
       console.log("\t", chalk.green("No file processing"));
       break;
   }
+
+  db.set(
+    `current.course.students.${submission.user.id}.fileNames`,
+    allFileNames
+  ).write();
+}
+
+function showEditor(student) {
+  const result = childProcess.spawnSync(
+    "code",
+    ["--wait", submissionDir(student)],
+    { stdio: "ignore" }
+  );
+  debug("Editor result %O", result);
+}
+
+async function showPager(student) {
+  const { fileName } = await inquirer.prompt([
+    {
+      type: "list",
+      message: "Choose a file to page",
+      name: "fileName",
+      choices: () =>
+        student.fileNames.map((fn) => ({
+          name: fn,
+          value: fn,
+        })),
+    },
+  ]);
+
+  console.log("FILE NAME", fileName);
+  const result = childProcess.spawnSync(
+    "/bin/cat",
+    [submissionPath(student, fileName)],
+  );
+  console.log("RESULT", result.stdout.toString());
+}
+
+function askForScore(maxScore) {
+  return inquirer
+    .prompt([
+      {
+        type: "input",
+        message: `Enter score (0-${maxScore})`,
+        name: "score",
+        default: `${maxScore}`, // Placate validate.
+        validate: (entry) => {
+          if (!entry.match(/^[0-9]+(\.[0-9]*)?$/)) {
+            return "Not a valid score";
+          }
+          const value = parseFloat(entry);
+          if (!isScoreValid(value, maxScore)) {
+            return invalidScoreMessage(value, maxScore);
+          }
+          return true;
+        },
+      },
+    ])
+    .then((answer) => answer.score);
+}
+
+async function confirmScore(student, score, maxScore) {
+  const formattedScore = `${chalk.yellow(student.name)} score ${chalk.yellow(
+    score
+  )}/${maxScore}`;
+
+  const { confirmed } = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "confirmed",
+      message: `Assign ${formattedScore}?`,
+    },
+  ]);
+
+  if (confirmed) {
+    await gradeSubmission(student.id, score);
+    console.log(chalk.green(formattedScore));
+  }
+  return confirmed;
 }
 
 function sanitizeString(str) {
@@ -459,62 +597,94 @@ export function cli() {
       userId: "user ID of student; if missing, select from list",
       score: "score to assign; required with userId",
     })
-    .option("--no-show-editor", "Don't open editor")
+    .option("--no-editor", "Don't open editor")
     .action(async (userId, score, options) => {
       // Choose a student to grade.
-      let selectedStudent = null;
+      const maxScore = currentMaxScore();
 
-      if (!userId) {
-        // No userID specified; offer a choice.
-        const allStudents = await getStudents();
-        await inquirer
-          .prompt([
-            {
-              type: "list",
-              name: "student",
-              message: `Choose a student (${allStudents.length} available)`,
-              pageSize: 20,
-              choices: () =>
-                allStudents.map((s) => ({
-                  name: s.name,
-                  value: s,
-                })),
-            },
-          ])
-          .then((answer) => {
-            selectedStudent = answer.s;
-          });
-      } else {
-        // UserID given on command line.
+      if (userId) {
+        // Grade one student.
         if (!score) {
           fatal("Specific `userId` also requires `score`.");
         }
 
-        selectedStudent = db.get(`current.course.students.${userId}`).value();
-        if (!selectedStudent) {
-          fatal(`No student with id ${userId}`);
+        const student = db.get(`current.course.students.${userId}`).value();
+        if (!student) {
+          fatal(`No cached student with id ${userId}`);
+        }
+
+        if (options.showEditor) {
+          showEditor(student);
+        }
+
+        await confirmScore(student, score, maxScore);
+      } else {
+        // Grade multiple students.
+        const allStudents = [];
+        for (const [id, student] of Object.entries(
+          db.get("current.course.students").value()
+        )) {
+          allStudents.push(student);
+        }
+        const gradedStudents = [];
+        let remainingStudents = [];
+        const rows = [[chalk.red("UNGRADED"), chalk.green("GRADED")]];
+
+        for (const student of allStudents) {
+          if (student.submission.workflow_state === "graded") {
+            gradedStudents.push(student);
+            rows.push(["", chalk.green(student.name)]);
+          } else {
+            remainingStudents.push(student);
+            rows.push([chalk.red(student.name), ""]);
+          }
+        }
+
+        console.log(
+          table(rows, {
+            drawHorizontalLine: (idx, size) =>
+              idx === 0 || idx === 1 || idx === size,
+          })
+        );
+
+        while (size(remainingStudents) > 0) {
+          const answer = await inquirer.prompt([
+            {
+              type: "list",
+              name: "student",
+              message: "Choose a student (?? available)",
+              pageSize: 20,
+              choices: () =>
+                remainingStudents.map((s) => ({
+                  name: `${s.name} ${s.submission.workflow_state}`,
+                  value: s,
+                })),
+            },
+          ]);
+          const student = answer.student;
+
+          await showPager(student);
+
+          if (options.editor) {
+            showEditor(student);
+          }
+
+          const score = await askForScore(maxScore);
+          const confirmed = await confirmScore(student, score, maxScore);
+          if (confirmed) {
+            const gradedStudent = remainingStudents.find(
+              (s) => s.id === student.id
+            );
+            remainingStudents = remainingStudents.filter(
+              (s) => s.id !== student.id
+            );
+            gradedStudents.push(gradedStudent);
+
+            const updatedSubmission = await getOneSubmission(student.id);
+            cacheSubmission(student.id, updatedSubmission);
+          }
         }
       }
-
-      console.log(chalk.yellow(`Grade ${selectedStudent.name}`));
-
-      if (options.showEditor) {
-        const result = childProcess.spawnSync(
-          "code",
-          ["--wait", submissionDir(selectedStudent)],
-          { stdio: "ignore" }
-        );
-        debug("Editor result %O", result);
-      }
-
-      const result = await gradeSubmission(userId, score);
-      console.log(
-        chalk.green(
-          `${selectedStudent.name} scores ${
-            result.score
-          } of ${currentMaxScore()}`
-        )
-      );
     });
 
   program
@@ -529,6 +699,8 @@ export function cli() {
           `(${sub.user.id})`,
           formatSubmissionType(sub.submission_type)
         );
+
+        cacheSubmission(sub.user.id, sub);
 
         switch (sub.workflow_state) {
           case "graded":
@@ -561,11 +733,7 @@ export function cli() {
                 chalk.green(attachment.display_name),
                 attachment["content-type"]
               );
-              await downloadAndProcessSubmission(
-                attachment.url,
-                attachment["content-type"],
-                submissionPath(sub.user, attachment.display_name)
-              );
+              await downloadAndProcessSubmission(sub, attachment);
             }
             break;
           case "online_url":
@@ -596,6 +764,9 @@ export function cli() {
       let selectedAssignment = null;
       if (id) {
         selectedAssignment = allAssignments.find((a) => a.id === +id);
+        if (!selectedAssignment) {
+          fatal(`No assignment with ID ${id}`);
+        }
       } else {
         await inquirer
           .prompt([
@@ -613,6 +784,11 @@ export function cli() {
           ])
           .then((answer) => (selectedAssignment = answer.assignment));
       }
+
+      const submissionSummary = await getSubmissionSummary(
+        selectedAssignment.id
+      );
+
       db.set("current.assignment", {
         id: selectedAssignment.id,
         name: selectedAssignment.name,
@@ -620,6 +796,7 @@ export function cli() {
         needs_grading_count: selectedAssignment.needs_grading_count,
         submission_types: selectedAssignment.submission_types,
         points_possible: selectedAssignment.points_possible,
+        submission_summary: submissionSummary,
       }).write();
       console.log(
         chalk.green(`Current assignment now '${selectedAssignment.name}'`)
