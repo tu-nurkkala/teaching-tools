@@ -328,6 +328,9 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
   const absPath = submissionPath(submission.user, attachment.display_name);
   const contentType = attachment["content-type"];
 
+  const dbPath = `current.course.students.${submission.user.id}.files`;
+  db.unset(dbPath).write();
+
   try {
     await downloadOneAttachment(attachment.url, absPath);
   } catch (err) {
@@ -424,10 +427,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
       break;
   }
 
-  db.set(
-    `current.course.students.${submission.user.id}.files`,
-    allFiles
-  ).write();
+  db.set(dbPath, allFiles).write();
 }
 
 function showEditor(student) {
@@ -437,6 +437,81 @@ function showEditor(student) {
     { stdio: "ignore" }
   );
   debug("Editor result %O", result);
+}
+
+function formatGradeChoice(name, points, maxPoints) {
+  return {
+    name: [name, chalk.yellow(`(${points}/${maxPoints})`)].join(" "),
+    value: points,
+  };
+}
+
+function gradePassFail(maxPoints) {
+  return inquirer
+    .prompt([
+      {
+        type: "list",
+        message: "Pass or fail",
+        name: "score",
+        choices: [
+          formatGradeChoice("Pass", maxPoints, maxPoints),
+          formatGradeChoice("Fail", 0, maxPoints),
+        ],
+      },
+    ])
+    .then((answer) => answer.score);
+}
+
+function gradeLetter(maxPoints) {
+  const SCALE = [
+    { grade: "A", percent: 100.0 },
+    { grade: "B", percent: 90.0 },
+    { grade: "C", percent: 80.0 },
+    { grade: "D", percent: 70.0 },
+    { grade: "F", percent: 60.0 },
+    { grade: "N", percent: 0.0 },
+  ];
+
+  return inquirer
+    .prompt([
+      {
+        type: "list",
+        message: "Assign a grade",
+        name: "score",
+        choices: () =>
+          SCALE.map((gr) =>
+            formatGradeChoice(
+              gr.grade,
+              (gr.percent / 100.0) * maxPoints,
+              maxPoints
+            )
+          ),
+      },
+    ])
+    .then((answer) => answer.score);
+}
+
+function gradePoints(maxScore) {
+  return inquirer
+    .prompt([
+      {
+        type: "input",
+        message: `Enter score (0-${maxScore})`,
+        name: "score",
+        default: `${maxScore}`, // Placate validate.
+        validate: (entry) => {
+          if (!entry.match(/^[0-9]+(\.[0-9]*)?$/)) {
+            return "Not a valid score";
+          }
+          const value = parseFloat(entry);
+          if (!isScoreValid(value, maxScore)) {
+            return invalidScoreMessage(value, maxScore);
+          }
+          return true;
+        },
+      },
+    ])
+    .then((answer) => answer.score);
 }
 
 async function showPager(student) {
@@ -470,29 +545,6 @@ async function showPager(student) {
   childProcess.spawnSync("less", filePaths, {
     stdio: "inherit",
   });
-}
-
-function askForScore(maxScore) {
-  return inquirer
-    .prompt([
-      {
-        type: "input",
-        message: `Enter score (0-${maxScore})`,
-        name: "score",
-        default: `${maxScore}`, // Placate validate.
-        validate: (entry) => {
-          if (!entry.match(/^[0-9]+(\.[0-9]*)?$/)) {
-            return "Not a valid score";
-          }
-          const value = parseFloat(entry);
-          if (!isScoreValid(value, maxScore)) {
-            return invalidScoreMessage(value, maxScore);
-          }
-          return true;
-        },
-      },
-    ])
-    .then((answer) => answer.score);
 }
 
 async function confirmScore(student, score, maxScore) {
@@ -635,6 +687,10 @@ export function cli() {
     })
     .option("--editor", "Open files in editor")
     .option("--pager", "Open files in pager (default)")
+    .requiredOption(
+      "--style <style>",
+      chalk`Grading style: {blue points}, {blue passFail}, {blue letter}`
+    )
     .action(async (userId, score, options) => {
       const maxScore = currentMaxScore();
 
@@ -646,6 +702,21 @@ export function cli() {
         if (!options.editor) {
           options.pager = true;
         }
+      }
+
+      let gradingFunction = null;
+      switch (options.style) {
+        case "points":
+          gradingFunction = gradePoints;
+          break;
+        case "passFail":
+          gradingFunction = gradePassFail;
+          break;
+        case "letter":
+          gradingFunction = gradeLetter;
+          break;
+        default:
+          fatal(`Invalid grading style '${options.grade}'`);
       }
 
       function showViewer(student) {
@@ -730,7 +801,7 @@ export function cli() {
 
           await showViewer(student);
 
-          const score = await askForScore(maxScore);
+          const score = await gradingFunction(maxScore);
           const confirmed = await confirmScore(student, score, maxScore);
           if (confirmed) {
             const gradedStudent = remainingStudents.find(
