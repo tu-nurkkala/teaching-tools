@@ -23,6 +23,8 @@ import pluralize from "pluralize";
 import childProcess from "child_process";
 import boxen from "boxen";
 import ora from "ora";
+import tar from "tar";
+import wrapText from "wrap-text";
 
 const prettyError = require("pretty-error").start();
 prettyError.appendStyle({
@@ -122,6 +124,31 @@ function getAssignments() {
   return api_client.paginate.all(`courses/${courseId}/assignments`);
 }
 
+async function getGroups() {
+  const courseId = getCurrentCourseId();
+
+  const groupCategoryById = {};
+  await api_client
+    .get(`courses/${courseId}/group_categories`)
+    .then((response) => {
+      for (const category in response.body) {
+        groupCategoryById[category.id] = pick(category, ["id", "name"]);
+      }
+    });
+
+  const groupById = {};
+  await api_client.get(`courses/${courseId}/groups`).then((response) => {
+    for (const group in response.body) {
+      groupById[group.id] = pick(group, ["id", "name", "group_category_id"]);
+    }
+  });
+
+  // XXXXXXXXXXXXXXXXXXXXXXX START HERE IN THE MORNING ("hello!")
+  return api_client
+    .get(`groups/${groupId}/users`)
+    .then((result) => result.body);
+}
+
 function getSubmissionSummary(assignmentId) {
   const courseId = getCurrentCourseId();
   return api_client
@@ -174,17 +201,22 @@ function submissionUrl(userId) {
   ].join("/");
 }
 
-function gradeSubmission(userId, score) {
+function gradeSubmission(userId, score, comment) {
   const maxScore = currentMaxScore();
   if (!isScoreValid(score, maxScore)) {
     fatal(invalidScoreMessage(score, maxScore));
   }
 
+  const parameters = {
+    submission: { posted_grade: score },
+  };
+  if (comment) {
+    parameters.comment = { text_comment: comment };
+  }
+
   return api_client
     .put(submissionUrl(userId), {
-      searchParams: queryString.stringify({
-        submission: { posted_grade: score },
-      }),
+      searchParams: queryString.stringify(parameters),
     })
     .then((response) => response.body);
 }
@@ -324,6 +356,64 @@ function downloadOneAttachment(url, absPath) {
   return pipeline(got.stream(url), createWriteStream(absPath));
 }
 
+class ExtractHelper {
+  constructor() {
+    this.studentFiles = [];
+    this.files = { extracted: 0, skipped: 0 };
+    this.bytes = { extracted: 0, skipped: 0 };
+  }
+
+  skipEntry(name) {
+    return (
+      name.includes("node_modules/") ||
+      name.includes(".git/") ||
+      name.includes(".idea/")
+    );
+  }
+
+  addEntry(name, size) {
+    if (this.skipEntry(name)) {
+      this.files.skipped += 1;
+      this.bytes.skipped += size;
+    } else {
+      this.files.extracted += 1;
+      this.bytes.extracted += size;
+      this.studentFiles.push({ name, size });
+
+      console.log(
+        "\t",
+        chalk.green(`${name}`),
+        chalk.yellow(`(${prettyBytes(size)})`)
+      );
+    }
+  }
+
+  report() {
+    const segments = [];
+    if (this.files.skipped === 0) {
+      segments.push(
+        `${this.files.extracted} ${pluralize("file", this.files.extracted)}`
+      );
+    } else {
+      const totalFiles = this.files.skipped + this.files.extracted;
+      segments.push(`${this.files.extracted}/${totalFiles}`);
+      segments.push(`${this.files.skipped} skipped`);
+    }
+    if (this.bytes.skipped === 0) {
+      segments.push(prettyBytes(this.bytes.extracted));
+    } else {
+      const totalBytes = this.bytes.skipped + this.bytes.extracted;
+      segments.push(
+        `${prettyBytes(this.bytes.extracted)}/${prettyBytes(totalBytes)}`
+      );
+      segments.push(`${prettyBytes(this.bytes.skipped)} skipped`);
+    }
+    const report = ["\t "] + segments.join(" | ");
+    const color = this.bytes.skipped || this.files.skipped ? "red" : "teal";
+    console.log(chalk.keyword(color)(report));
+  }
+}
+
 async function downloadAndProcessOneAttachment(submission, attachment) {
   const absPath = submissionPath(submission.user, attachment.display_name);
   const contentType = attachment["content-type"];
@@ -337,86 +427,54 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
     warning(`Problem with download: ${err}`);
   }
 
-  const allFiles = [];
-
-  function addFile(name, size) {
-    const segments = ["\t"];
-    if (name.endsWith("/")) {
-      // According to the yauzl docs, directories end with a slash.
-      // Don't add them.
-      segments.push(chalk.yellow(`${name} - skipping directory`));
-    } else {
-      segments.push(
-        chalk.green(`${name}`),
-        chalk.yellow(`(${prettyBytes(size)})`)
-      );
-      allFiles.push({ name, size });
-    }
-    console.log(segments.join(" "));
-  }
+  const extractHelper = new ExtractHelper();
 
   switch (contentType) {
     case "application/zip":
     case "application/x-zip-compressed":
       console.log("\t", chalk.cyan("Zip file"));
       try {
-        const stats = {
-          files: { extracted: 0, skipped: 0 },
-          bytes: { extracted: 0, skipped: 0 },
-        };
         await extractZip(absPath, {
           dir: dirname(absPath),
           onEntry: (entry) => {
             debug("Zip entry %O", entry);
-            if (entry.fileName.includes("node_modules/")) {
-              stats.files.skipped += 1;
-              stats.bytes.skipped += entry.uncompressedSize;
-            } else {
-              stats.files.extracted += 1;
-              stats.bytes.extracted += entry.uncompressedSize;
-              addFile(entry.fileName, entry.uncompressedSize);
+            if (!entry.fileName.endsWith("/")) {
+              // According to the yauzl docs, directories end with a slash.
+              // Don't add them.
+              extractHelper.addEntry(entry.fileName, entry.uncompressedSize);
             }
           },
         });
-        const segments = [];
-        if (stats.files.skipped === 0) {
-          segments.push(
-            `${stats.files.extracted} ${pluralize(
-              "file",
-              stats.files.extracted
-            )}`
-          );
-        } else {
-          const totalFiles = stats.files.skipped + stats.files.extracted;
-          segments.push(`${stats.files.extracted}/${totalFiles}`);
-          segments.push(`${stats.files.skipped} skipped`);
-        }
-        if (stats.bytes.skipped === 0) {
-          segments.push(`${prettyBytes(stats.bytes.extracted)} bytes`);
-        } else {
-          const totalBytes = stats.bytes.skipped + stats.bytes.extracted;
-          segments.push(
-            `${prettyBytes(stats.bytes.extracted)}/${prettyBytes(totalBytes)}`
-          );
-          segments.push(`${prettyBytes(stats.bytes.skipped)} skipped`);
-        }
-        const report = ["\t "] + segments.join(" | ");
-        const color =
-          stats.bytes.skipped || stats.files.skipped ? "red" : "teal";
-        console.log(chalk.keyword(color)(report));
+        extractHelper.report();
       } catch (err) {
-        console.log(chalk.red("Problem extracting zip file:", err));
+        warning(`Problem extracting zip file: ${err}`);
       }
       break;
 
     case "application/x-tar":
       console.log("\t", chalk.cyan("Tar file"));
+      try {
+        await tar.extract({
+          file: absPath,
+          cwd: dirname(absPath),
+          filter: (path, entry) => !extractHelper.skipEntry(path),
+          onentry: (entry) => {
+            debug("Tar entry %O", entry);
+            if (entry.type !== "Directory") {
+              extractHelper.addEntry(entry.path, entry.size);
+            }
+          },
+        });
+        extractHelper.report();
+      } catch (err) {
+        warning(`Problem extracting tar file: ${err}`);
+      }
       break;
 
     case "application/json":
     case "text/javascript":
     case "application/pdf":
-      addFile(attachment.display_name, attachment.size);
+      extractHelper.addEntry(attachment.display_name, attachment.size);
       console.log("\t", chalk.green("No processing required"));
       break;
 
@@ -427,7 +485,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
       break;
   }
 
-  db.set(dbPath, allFiles).write();
+  db.set(dbPath, extractHelper.studentFiles).write();
 }
 
 function showEditor(student) {
@@ -523,23 +581,30 @@ async function showPager(student) {
   }
 
   let filePaths = [];
-  if (allFiles.length > 1) {
-    const { files } = await inquirer.prompt([
-      {
-        type: "checkbox",
-        message: "Choose files to inspect",
-        pageSize: 20,
-        name: "files",
-        choices: () =>
-          allFiles.map((file) => ({
-            name: `${file.name} (${prettyBytes(file.size)})`,
-            value: file,
-          })),
-      },
-    ]);
-    filePaths = files.map((f) => submissionPath(student, f.name));
-  } else {
+  if (allFiles.length === 1) {
     filePaths = [submissionPath(student, allFiles[0].name)];
+  } else {
+    while (filePaths.length === 0) {
+      const { files } = await inquirer.prompt([
+        {
+          type: "checkbox",
+          message: "Choose files to inspect",
+          pageSize: 20,
+          name: "files",
+          choices: () =>
+            allFiles.map((file) => ({
+              name: `${file.name} (${prettyBytes(file.size)})`,
+              value: file,
+            })),
+        },
+      ]);
+      if (files.length === 0) {
+        console.log(chalk.yellow("Select at least one file"));
+      } else {
+        console.log(chalk.green(`Selected ${files.length} files`));
+        filePaths = files.map((f) => submissionPath(student, f.name));
+      }
+    }
   }
 
   childProcess.spawnSync("less", filePaths, {
@@ -548,9 +613,18 @@ async function showPager(student) {
 }
 
 async function confirmScore(student, score, maxScore) {
-  const formattedScore = `${chalk.yellow(student.name)} score ${chalk.yellow(
-    score
-  )}/${maxScore}`;
+  const formattedScore = [
+    chalk.yellow(student.name),
+    `${chalk.yellow(score)}/${maxScore}`,
+  ].join(" ");
+
+  const { comment } = await inquirer.prompt([
+    {
+      type: "input",
+      name: "comment",
+      message: "Enter a comment (optional)",
+    },
+  ]);
 
   const { confirmed } = await inquirer.prompt([
     {
@@ -561,8 +635,13 @@ async function confirmScore(student, score, maxScore) {
   ]);
 
   if (confirmed) {
-    await gradeSubmission(student.id, score);
-    console.log(chalk.green(formattedScore));
+    await gradeSubmission(student.id, score, comment);
+    console.log("  Score", chalk.green(formattedScore));
+    if (comment) {
+      console.log("Comment", chalk.green(comment));
+    }
+  } else {
+    console.log(chalk.yellow("No score submitted"));
   }
   return confirmed;
 }
@@ -575,7 +654,8 @@ function sanitizeString(str) {
 }
 
 function makeBox(color, prefix, message) {
-  return boxen(chalk.keyword(color)(`${prefix} -`, message), {
+  const wrappedMessage = wrapText(`${prefix} - ${message}`);
+  return boxen(chalk.keyword(color)(wrappedMessage), {
     borderColor: color,
     borderStyle: "round",
     padding: { left: 1, right: 1 },
@@ -632,6 +712,14 @@ export function cli() {
       );
       const rows = students.map((s) => [s.id, s.name]);
       console.log(table(rows, { singleLine: true }));
+    });
+
+  listCmd
+    .command("groups")
+    .description("List all groups/members")
+    .action(async () => {
+      const groups = await getGroupsWithMembers();
+      console.log(groups);
     });
 
   const showCmd = program.command("show").description("Show details");
@@ -839,9 +927,10 @@ export function cli() {
         cacheSubmission(sub.user.id, sub);
 
         switch (sub.workflow_state) {
-          case "graded":
-            console.log("\t", chalk.green("Already graded"));
-            continue;
+          // Not sure we care about this; download again anyhow.
+          // case "graded":
+          //   console.log("\t", chalk.green("Already graded"));
+          //   continue;
           case "unsubmitted":
             console.log("\t", chalk.red("Not submitted"));
             continue;
