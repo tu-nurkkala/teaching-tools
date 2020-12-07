@@ -23,6 +23,7 @@ import boxen from "boxen";
 import ora from "ora";
 import tar from "tar";
 import wrapText from "wrap-text";
+import dir from "node-dir";
 
 import { program } from "commander";
 import { version } from "../package.json";
@@ -128,6 +129,10 @@ function getEnrollmentTerms() {
 
 function getCurrentCourseId() {
   return db.get("current.course.id").value();
+}
+
+function getStudent(studentId) {
+  return db.get(`current.course.students.${studentId}`).value();
 }
 
 function getCurrentAssignmentId() {
@@ -469,22 +474,37 @@ function showCurrentState() {
   );
 }
 
-function submissionDir(user) {
-  const absDirPath = untildify(
-    join(
-      "~/Scratch",
-      sanitizeString(db.get("current.course.course_code").value()),
-      sanitizeString(db.get("current.assignment.name").value()),
-      sanitizeString(user.sortable_name)
-    )
+function submissionBaseDir() {
+  return untildify("~/Scratch");
+}
+
+function submissionCourseDir() {
+  return join(
+    submissionBaseDir(),
+    sanitizeString(db.get("current.course.course_code").value())
   );
-  mkdirSync(absDirPath, { recursive: true });
-  return absDirPath;
+}
+
+function submissionAssignmentDir() {
+  return join(
+    submissionCourseDir(),
+    sanitizeString(db.get("current.assignment.name").value())
+  );
+}
+
+function submissionStudentDir(student) {
+  return join(submissionAssignmentDir(), sanitizeString(student.sortable_name));
+}
+
+function submissionDir(student) {
+  // This looks dumb, but would allow future expansion.
+  const finalDir = submissionStudentDir(student);
+  mkdirSync(finalDir, { recursive: true });
+  return finalDir;
 }
 
 function submissionPath(user, fileName) {
-  const absDirPath = submissionDir(user);
-  return join(absDirPath, fileName);
+  return join(submissionDir(user), fileName);
 }
 
 function downloadOneAttachment(url, absPath) {
@@ -791,7 +811,7 @@ async function confirmScore(student, score, maxScore) {
         choices: previousComments,
       },
     ]);
-    currentComments.push(selected);
+    currentComments.push(...selected);
   }
 
   const { comment } = await inquirer.prompt([
@@ -851,6 +871,10 @@ function fatal(message) {
 
 function warning(message) {
   console.log(makeBox("yellow", "WARNING", message));
+}
+
+function showSeparator() {
+  console.log(chalk.blue("-".repeat(80)));
 }
 
 export function cli() {
@@ -937,6 +961,45 @@ export function cli() {
       console.log(student);
     });
 
+  showCmd
+    .command("paths [studentId]")
+    .description("Show paths to downloaded files")
+    .action((studentId) => {
+      const entries = [
+        { name: "Base", path: submissionBaseDir() },
+        { name: "Course", path: submissionCourseDir() },
+        { name: "Assignment", path: submissionAssignmentDir() },
+      ];
+
+      if (studentId) {
+        const student = getStudent(studentId);
+        entries.push({ name: "Student", path: submissionStudentDir(student) });
+      }
+
+      const maxLen = _(entries)
+        .map("name")
+        .map((n) => n.length)
+        .max();
+
+      const rows = entries.map((e) => [
+        chalk.blue(_.padStart(e.name, maxLen)),
+        chalk.green(e.path),
+      ]);
+
+      console.log(table(rows, { singleLine: true }));
+    });
+
+  showCmd
+    .command("tree <studentId>")
+    .description("Show tree view of downloaded files")
+    .action((studentId) => {
+      const baseDir = submissionStudentDir(getStudent(studentId));
+      dir.files(baseDir, (err, files) => {
+        if (err) throw err;
+        files.forEach((f) => console.log(f));
+      });
+    });
+
   const findCmd = program.command("find").description("Find things");
 
   findCmd
@@ -1011,7 +1074,7 @@ export function cli() {
           fatal("Specific `userId` also requires `score`.");
         }
 
-        const student = db.get(`current.course.students.${userId}`).value();
+        const student = getStudent(userId);
         if (!student) {
           fatal(`No cached student with id ${userId}`);
         }
@@ -1061,6 +1124,7 @@ export function cli() {
         }
 
         while (_.size(remainingStudents) > 0) {
+          showSeparator();
           const answer = await inquirer.prompt([
             {
               type: "list",
@@ -1117,7 +1181,7 @@ export function cli() {
     });
 
   const setCmd = program
-    .command("set")
+    .command("select")
     .alias("choose")
     .description("Set current values");
 
