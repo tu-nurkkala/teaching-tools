@@ -1,11 +1,9 @@
-import { version } from "../package.json";
 import { config } from "dotenv";
 config();
 
-import { program } from "commander";
 import got from "got";
 import inquirer from "inquirer";
-import { size, keyBy, pick, sortBy } from "lodash";
+import _ from "lodash";
 import chalk from "chalk";
 import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
@@ -26,6 +24,11 @@ import ora from "ora";
 import tar from "tar";
 import wrapText from "wrap-text";
 
+import { program } from "commander";
+import { version } from "../package.json";
+program.version(version);
+program.option("--api-chatter", "Show API actions");
+
 const prettyError = require("pretty-error").start();
 prettyError.appendStyle({
   "pretty-error > trace > item": {
@@ -34,7 +37,11 @@ prettyError.appendStyle({
   },
 });
 
-const debug = Debug("cli");
+const debugCli = Debug("cli");
+const debugCache = debugCli.extend("cache");
+const debugNet = debugCli.extend("net");
+const debugExtract = debugCli.extend("extract");
+const debugDownload = debugCli.extend("download");
 
 import TurndownService from "turndown";
 const turndownService = new TurndownService({
@@ -67,25 +74,31 @@ const api_client = got.extend({
   hooks: {
     beforeRequest: [
       (options) => {
-        debug("Request options %O", options);
-        apiSpinner.start(
-          `Send ${chalk.blue(options.method)} request to ${chalk.blue(
-            options.url.href
-          )}`
-        );
+        debugNet("Request options %O", options);
+        if (program.apiChatter) {
+          apiSpinner.start(
+            `Send ${chalk.blue(options.method)} request to ${chalk.blue(
+              options.url.href
+            )}`
+          );
+        }
       },
     ],
     afterResponse: [
       (response) => {
-        debug("Response %O", response);
-        apiSpinner.succeed();
+        debugNet("Response %O", response);
+        if (program.apiChatter) {
+          apiSpinner.succeed();
+        }
         return response;
       },
     ],
     beforeError: [
       (error) => {
         console.log("ERROR", error);
-        apiSpinner.fail();
+        if (program.apiChatter) {
+          apiSpinner.fail();
+        }
       },
     ],
   },
@@ -108,7 +121,9 @@ function getEnrollmentTerms() {
   const accountId = db.get("canvas.account_id").value();
   return api_client
     .get(`accounts/${accountId}/terms`)
-    .then((result) => sortBy(result.body.enrollment_terms, (term) => -term.id));
+    .then((result) =>
+      _.sortBy(result.body.enrollment_terms, (term) => -term.id)
+    );
 }
 
 function getCurrentCourseId() {
@@ -119,34 +134,52 @@ function getCurrentAssignmentId() {
   return db.get("current.assignment.id").value();
 }
 
-function getAssignments() {
+async function getAssignments() {
   const courseId = getCurrentCourseId();
-  return api_client.paginate.all(`courses/${courseId}/assignments`);
+  return _.sortBy(
+    await api_client.paginate.all(`courses/${courseId}/assignments`),
+    (asgn) => asgn.due_at
+  );
 }
 
-async function getGroups() {
-  const courseId = getCurrentCourseId();
+async function getGroupCategories(courseId) {
+  const groupCategoryById = _(
+    await api_client
+      .get(`courses/${courseId}/group_categories`)
+      .then((response) => response.body)
+  )
+    .map((grpCat) => {
+      const newCat = _.pick(grpCat, ["id", "name"]);
+      newCat.groups = [];
+      return newCat;
+    })
+    .keyBy("id")
+    .value();
 
-  const groupCategoryById = {};
-  await api_client
-    .get(`courses/${courseId}/group_categories`)
-    .then((response) => {
-      for (const category in response.body) {
-        groupCategoryById[category.id] = pick(category, ["id", "name"]);
-      }
-    });
-
-  const groupById = {};
-  await api_client.get(`courses/${courseId}/groups`).then((response) => {
-    for (const group in response.body) {
-      groupById[group.id] = pick(group, ["id", "name", "group_category_id"]);
-    }
+  const groups = (
+    await api_client
+      .get(`courses/${courseId}/groups`)
+      .then((response) => response.body)
+  ).map((grp) => {
+    const newGrp = _.pick(grp, ["id", "name", "members_count"]);
+    newGrp.members = [];
+    groupCategoryById[grp.group_category_id].groups.push(newGrp);
+    return newGrp;
   });
 
-  // XXXXXXXXXXXXXXXXXXXXXXX START HERE IN THE MORNING ("hello!")
-  return api_client
-    .get(`groups/${groupId}/users`)
-    .then((result) => result.body);
+  for (const group of groups) {
+    (
+      await api_client
+        .get(`groups/${group.id}/users`)
+        .then((response) => response.body)
+    ).forEach((member) => {
+      const newMember = _.pick(member, ["id", "name", "sortable_name"]);
+      group.members.push(newMember);
+    });
+  }
+
+  db.set("current.course.groupCategories", groupCategoryById).write();
+  return groupCategoryById;
 }
 
 function getSubmissionSummary(assignmentId) {
@@ -201,6 +234,104 @@ function submissionUrl(userId) {
   ].join("/");
 }
 
+async function processOneSubmission(submission, options) {
+  console.log(
+    submission.id,
+    submission.user.name,
+    `(${submission.user.id})`,
+    formatSubmissionType(submission.submission_type)
+  );
+  if (options.showDetails) {
+    console.log(submission);
+  }
+
+  cacheSubmission(submission);
+  clearStudentFiles(submission);
+
+  switch (submission.workflow_state) {
+    // Not sure we care about this; download again anyhow.
+    // case "graded":
+    //   console.log("\t", chalk.green("Already graded"));
+    //   continue;
+    case "unsubmitted":
+      console.log("\t", chalk.red("Workflow state shows nothing submitted"));
+      return;
+  }
+
+  switch (submission.submission_type) {
+    case "online_text_entry":
+      writeAndCacheOneStudentFile(
+        submission,
+        "submission.html",
+        submission.body
+      );
+      writeAndCacheOneStudentFile(
+        submission,
+        "submission.md",
+        turndownService.turndown(submission.body)
+      );
+      break;
+
+    case "online_upload":
+      if (!submission.hasOwnProperty("attachments")) {
+        console.log(
+          submission.id,
+          chalk.red("NO SUBMISSION"),
+          submission.user.name
+        );
+        return;
+      }
+      for (const attachment of submission.attachments) {
+        console.log(
+          "\t",
+          chalk.green(attachment.display_name),
+          chalk.yellow(prettyBytes(attachment.size)),
+          attachment["content-type"]
+        );
+        if (options.maxSize) {
+          const sizeLimit = parseInt(options.maxSize);
+          if (attachment.size > sizeLimit) {
+            console.log(
+              "\t",
+              chalk.yellow(
+                `Too large [${prettyBytes(attachment.size)} > ${prettyBytes(
+                  sizeLimit
+                )}]`
+              )
+            );
+            continue;
+          }
+        }
+        await downloadAndProcessOneAttachment(submission, attachment);
+      }
+      break;
+
+    case "online_url":
+      writeAndCacheOneStudentFile(
+        submission,
+        "url.txt",
+        "submission.url" + "\n"
+      );
+      console.log("\t", chalk.green(submission.url));
+      break;
+
+    case "online_quiz":
+      console.log(chalk.green("Nothing to do for a quiz"));
+      break;
+
+    case null:
+      console.log("\t", chalk.red("Nothing submitted by this student"));
+      break;
+
+    default:
+      console.error(
+        chalk.red(
+          `Not set up to handle submission type '${submission.submission_type}'`
+        )
+      );
+  }
+}
+
 function gradeSubmission(userId, score, comment) {
   const maxScore = currentMaxScore();
   if (!isScoreValid(score, maxScore)) {
@@ -210,7 +341,7 @@ function gradeSubmission(userId, score, comment) {
   const parameters = {
     submission: { posted_grade: score },
   };
-  if (comment) {
+  if (comment && comment.length > 0) {
     parameters.comment = { text_comment: comment };
   }
 
@@ -221,8 +352,8 @@ function gradeSubmission(userId, score, comment) {
     .then((response) => response.body);
 }
 
-function cacheSubmission(userId, sub) {
-  db.set(`current.course.students.${userId}.submission`, {
+function cacheSubmission(sub) {
+  db.set(`current.course.students.${sub.user.id}.submission`, {
     id: sub.id,
     grade: sub.grade,
     score: sub.score,
@@ -332,6 +463,10 @@ function showCurrentState() {
   showElement("Term", current.term);
   showElement("Course", current.course);
   showElement("Assignment", current.assignment);
+  console.log(
+    chalk.blue("       URL"),
+    chalk.yellow(current.assignment.html_url)
+  );
 }
 
 function submissionDir(user) {
@@ -353,6 +488,7 @@ function submissionPath(user, fileName) {
 }
 
 function downloadOneAttachment(url, absPath) {
+  debugDownload(absPath);
   return pipeline(got.stream(url), createWriteStream(absPath));
 }
 
@@ -367,7 +503,9 @@ class ExtractHelper {
     return (
       name.includes("node_modules/") ||
       name.includes(".git/") ||
-      name.includes(".idea/")
+      name.includes(".idea/") ||
+      name.includes("/.DS_Store") ||
+      name.includes("/._")
     );
   }
 
@@ -414,12 +552,29 @@ class ExtractHelper {
   }
 }
 
+function dbStudentFilePath(submission) {
+  return `current.course.students.${submission.user.id}.files`;
+}
+
+function clearStudentFiles(submission) {
+  debugCache("Clear student files");
+  db.set(dbStudentFilePath(submission), []).write();
+}
+
+function cacheOneStudentFile(submission, name, size) {
+  const entry = { name, size };
+  debugCache("Cache %O", entry);
+  db.get(dbStudentFilePath(submission)).push(entry).write();
+}
+
+function writeAndCacheOneStudentFile(submission, name, content) {
+  writeFileSync(submissionPath(submission.user, name), content);
+  cacheOneStudentFile(submission, name, content.length);
+}
+
 async function downloadAndProcessOneAttachment(submission, attachment) {
   const absPath = submissionPath(submission.user, attachment.display_name);
   const contentType = attachment["content-type"];
-
-  const dbPath = `current.course.students.${submission.user.id}.files`;
-  db.unset(dbPath).write();
 
   try {
     await downloadOneAttachment(attachment.url, absPath);
@@ -437,7 +592,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
         await extractZip(absPath, {
           dir: dirname(absPath),
           onEntry: (entry) => {
-            debug("Zip entry %O", entry);
+            debugExtract("Zip entry %O", entry);
             if (!entry.fileName.endsWith("/")) {
               // According to the yauzl docs, directories end with a slash.
               // Don't add them.
@@ -452,6 +607,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
       break;
 
     case "application/x-tar":
+    case "application/x-gzip":
       console.log("\t", chalk.cyan("Tar file"));
       try {
         await tar.extract({
@@ -459,7 +615,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
           cwd: dirname(absPath),
           filter: (path, entry) => !extractHelper.skipEntry(path),
           onentry: (entry) => {
-            debug("Tar entry %O", entry);
+            debugExtract("Tar entry %O", entry);
             if (entry.type !== "Directory") {
               extractHelper.addEntry(entry.path, entry.size);
             }
@@ -472,20 +628,25 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
       break;
 
     case "application/json":
-    case "text/javascript":
     case "application/pdf":
+    case "application/sql":
+    case "text/javascript":
+    case "text/plain":
+    case "text/x-sql":
       extractHelper.addEntry(attachment.display_name, attachment.size);
       console.log("\t", chalk.green("No processing required"));
       break;
 
     default:
       warning(
-        `Can't process ${attachment.display_name} (${attachment["content-type"]})`
+        `Not configured to process ${attachment.display_name} (${attachment["content-type"]})`
       );
       break;
   }
 
-  db.set(dbPath, extractHelper.studentFiles).write();
+  extractHelper.studentFiles.forEach((fileInfo) =>
+    cacheOneStudentFile(submission, fileInfo.name, fileInfo.size)
+  );
 }
 
 function showEditor(student) {
@@ -494,7 +655,7 @@ function showEditor(student) {
     ["--wait", submissionDir(student)],
     { stdio: "ignore" }
   );
-  debug("Editor result %O", result);
+  debugCli("Editor result %O", result);
 }
 
 function formatGradeChoice(name, points, maxPoints) {
@@ -618,13 +779,33 @@ async function confirmScore(student, score, maxScore) {
     `${chalk.yellow(score)}/${maxScore}`,
   ].join(" ");
 
+  const currentComments = [];
+
+  const previousComments = db.get("current.assignment.comments").value();
+  if (previousComments.length) {
+    const { selected } = await inquirer.prompt([
+      {
+        type: "checkbox",
+        name: "selected",
+        message: "Choose existing comments (optional)",
+        choices: previousComments,
+      },
+    ]);
+    currentComments.push(selected);
+  }
+
   const { comment } = await inquirer.prompt([
     {
       type: "input",
       name: "comment",
-      message: "Enter a comment (optional)",
+      message: "Add a comment (optional)",
     },
   ]);
+
+  if (comment) {
+    currentComments.push(comment);
+    db.get("current.assignment.comments").push(comment).write();
+  }
 
   const { confirmed } = await inquirer.prompt([
     {
@@ -635,10 +816,11 @@ async function confirmScore(student, score, maxScore) {
   ]);
 
   if (confirmed) {
-    await gradeSubmission(student.id, score, comment);
+    const commentString = currentComments.join("\n");
+    await gradeSubmission(student.id, score, commentString);
     console.log("  Score", chalk.green(formattedScore));
-    if (comment) {
-      console.log("Comment", chalk.green(comment));
+    if (commentString) {
+      console.log("Comment", chalk.green(commentString));
     }
   } else {
     console.log(chalk.yellow("No score submitted"));
@@ -672,8 +854,6 @@ function warning(message) {
 }
 
 export function cli() {
-  program.version(version);
-
   showCurrentState();
 
   program
@@ -688,7 +868,7 @@ export function cli() {
     .description("List assignments")
     .action(async () => {
       const groups = db.get("current.course.assignment_groups").value();
-      const assignments = sortBy(await getAssignments(), (a) => a.due_at);
+      const assignments = await getAssignments();
       const rows = assignments.map((a) => [
         a.id,
         a.needs_grading_count
@@ -707,7 +887,7 @@ export function cli() {
     .command("students")
     .description("List students")
     .action(async () => {
-      const students = sortBy(await getStudents(getCurrentCourseId()), (s) =>
+      const students = _.sortBy(await getStudents(getCurrentCourseId()), (s) =>
         s.sortable_name.toLowerCase()
       );
       const rows = students.map((s) => [s.id, s.name]);
@@ -717,9 +897,18 @@ export function cli() {
   listCmd
     .command("groups")
     .description("List all groups/members")
-    .action(async () => {
-      const groups = await getGroupsWithMembers();
-      console.log(groups);
+    .action(() => {
+      const groupCategories = db.get("current.course.groupCategories").value();
+      const rows = [];
+
+      for (let grpCat of _.values(groupCategories)) {
+        for (let grp of grpCat.groups) {
+          for (let member of grp.members) {
+            rows.push([grpCat.name, grp.name, member.name]);
+          }
+        }
+      }
+      console.log(table(rows, { singleLine: true }));
     });
 
   const showCmd = program.command("show").description("Show details");
@@ -775,9 +964,10 @@ export function cli() {
     })
     .option("--editor", "Open files in editor")
     .option("--pager", "Open files in pager (default)")
-    .requiredOption(
-      "--style <style>",
-      chalk`Grading style: {blue points}, {blue passFail}, {blue letter}`
+    .option(
+      "--scheme <scheme>",
+      chalk`Grading scheme: {blue points}, {blue passFail}, {blue letter}`,
+      "points"
     )
     .action(async (userId, score, options) => {
       const maxScore = currentMaxScore();
@@ -793,7 +983,7 @@ export function cli() {
       }
 
       let gradingFunction = null;
-      switch (options.style) {
+      switch (options.scheme) {
         case "points":
           gradingFunction = gradePoints;
           break;
@@ -804,7 +994,7 @@ export function cli() {
           gradingFunction = gradeLetter;
           break;
         default:
-          fatal(`Invalid grading style '${options.grade}'`);
+          fatal(`Invalid grading scheme '${options.grade}'`);
       }
 
       function showViewer(student) {
@@ -864,17 +1054,18 @@ export function cli() {
           }
           return [
             student.name,
+            `(${student.id})`,
             chalk.yellow(student.submission.workflow_state),
             fileDetails,
           ].join(" ");
         }
 
-        while (size(remainingStudents) > 0) {
+        while (_.size(remainingStudents) > 0) {
           const answer = await inquirer.prompt([
             {
               type: "list",
               name: "student",
-              message: `Choose a student (${size(
+              message: `Choose a student (${_.size(
                 remainingStudents
               )} available)`,
               pageSize: 20,
@@ -901,92 +1092,26 @@ export function cli() {
             gradedStudents.push(gradedStudent);
 
             const updatedSubmission = await getOneSubmission(student.id);
-            cacheSubmission(student.id, updatedSubmission);
+            cacheSubmission(updatedSubmission);
           }
         }
       }
     });
 
   program
-    .command("download")
+    .command("download [studentId]")
     .description("Download submissions")
     .option(
       "--max-size <size>",
       "Don't get attachments larger than this (bytes)"
     )
-    .action(async (options) => {
-      const submissions = await getSubmissions();
-      for (const sub of submissions) {
-        console.log(
-          sub.id,
-          sub.user.name,
-          `(${sub.user.id})`,
-          formatSubmissionType(sub.submission_type)
-        );
-
-        cacheSubmission(sub.user.id, sub);
-
-        switch (sub.workflow_state) {
-          // Not sure we care about this; download again anyhow.
-          // case "graded":
-          //   console.log("\t", chalk.green("Already graded"));
-          //   continue;
-          case "unsubmitted":
-            console.log("\t", chalk.red("Not submitted"));
-            continue;
-        }
-
-        switch (sub.submission_type) {
-          case "online_text_entry":
-            writeFileSync(
-              submissionPath(sub.user, "submission.html"),
-              sub.body
-            );
-            writeFileSync(
-              submissionPath(sub.user, "submission.txt"),
-              turndownService.turndown(sub.body)
-            );
-            break;
-          case "online_upload":
-            if (!sub.hasOwnProperty("attachments")) {
-              console.log(sub.id, chalk.red("NO SUBMISSION"), sub.user.name);
-              continue;
-            }
-            for (const attachment of sub.attachments) {
-              console.log(
-                "\t",
-                chalk.green(attachment.display_name),
-                chalk.yellow(prettyBytes(attachment.size)),
-                attachment["content-type"]
-              );
-              if (options.maxSize) {
-                const sizeLimit = parseInt(options.maxSize);
-                if (attachment.size > sizeLimit) {
-                  console.log(
-                    "\t",
-                    chalk.yellow(
-                      `Too large [${prettyBytes(
-                        attachment.size
-                      )} > ${prettyBytes(sizeLimit)}]`
-                    )
-                  );
-                  continue;
-                }
-              }
-              await downloadAndProcessOneAttachment(sub, attachment);
-            }
-            break;
-          case "online_url":
-            writeFileSync(submissionPath(sub.user, "url.txt"), sub.url + "\n");
-            console.log("\t", chalk.green(sub.url));
-            break;
-          case "online_quiz":
-            console.log(chalk.green("Nothing to do"));
-            break;
-          default:
-            console.error(
-              chalk.red(`Can't handle submission type '${sub.submission_type}'`)
-            );
+    .option("--show-details", "Show submission details")
+    .action(async (studentId, options) => {
+      if (studentId) {
+        await processOneSubmission(await getOneSubmission(studentId), options);
+      } else {
+        for (const submission of await getSubmissions()) {
+          await processOneSubmission(submission, options);
         }
       }
     });
@@ -1014,7 +1139,7 @@ export function cli() {
               type: "list",
               name: "assignment",
               message: `Choose an assignment (${allAssignments.length} available)`,
-              pageSize: 10,
+              pageSize: 20,
               choices: () =>
                 allAssignments.map((assignment) => ({
                   name: formatAssignment(assignment),
@@ -1029,15 +1154,20 @@ export function cli() {
         selectedAssignment.id
       );
 
-      db.set("current.assignment", {
-        id: selectedAssignment.id,
-        name: selectedAssignment.name,
-        due_at: selectedAssignment.due_at,
-        needs_grading_count: selectedAssignment.needs_grading_count,
-        submission_types: selectedAssignment.submission_types,
-        points_possible: selectedAssignment.points_possible,
-        submission_summary: submissionSummary,
-      }).write();
+      const dbData = _(selectedAssignment)
+        .pick([
+          "id",
+          "name",
+          "due_at",
+          "html_url",
+          "needs_grading_count",
+          "submission_types",
+          "points_possible",
+        ])
+        .set("submission_summary", submissionSummary)
+        .set("comments", []);
+
+      db.set("current.assignment", dbData).write();
       console.log(
         chalk.green(`Current assignment now '${selectedAssignment.name}'`)
       );
@@ -1092,13 +1222,15 @@ export function cli() {
       ]);
       const groups = await getAssignmentGroups(answer.course.id);
       const students = await getStudents(answer.course.id);
+      const groupCategories = await getGroupCategories(answer.course.id);
 
       db.set("current.course", {
         id: answer.course.id,
         name: answer.course.name,
         course_code: answer.course.course_code,
-        assignment_groups: keyBy(groups, (elt) => elt.id),
-        students: keyBy(students, (elt) => elt.id),
+        assignment_groups: _.keyBy(groups, (elt) => elt.id),
+        students: _.keyBy(students, (elt) => elt.id),
+        groupCategories,
       }).write();
     });
 
