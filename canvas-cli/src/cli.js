@@ -626,6 +626,7 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
       }
       break;
 
+    case "application/gzip":
     case "application/x-tar":
     case "application/x-gzip":
       console.log("\t", chalk.cyan("Tar file"));
@@ -678,11 +679,26 @@ function showEditor(student) {
   debugCli("Editor result %O", result);
 }
 
-function formatGradeChoice(name, points, maxPoints) {
-  return {
-    name: [name, chalk.yellow(`(${points}/${maxPoints})`)].join(" "),
-    value: points,
-  };
+function longestValueLength(objArray, key) {
+  return _(objArray)
+    .map(key)
+    .map((n) => n.length)
+    .max();
+}
+
+function formatGradeChoices(scale, maxPoints) {
+  const longestGradeLen = longestValueLength(scale, "grade");
+  return scale.map((sc) => {
+    const points = (sc.percent / 100.0) * maxPoints;
+    return {
+      name: [
+        _.padEnd(sc.grade, longestGradeLen),
+        chalk.yellow(_.padStart(`(${Number(points).toFixed(2)})`, 7)),
+        sc.description || "",
+      ].join(" "),
+      value: points,
+    };
+  });
 }
 
 function gradePassFail(maxPoints) {
@@ -692,10 +708,13 @@ function gradePassFail(maxPoints) {
         type: "list",
         message: "Pass or fail",
         name: "score",
-        choices: [
-          formatGradeChoice("Pass", maxPoints, maxPoints),
-          formatGradeChoice("Fail", 0, maxPoints),
-        ],
+        choices: formatGradeChoices(
+          [
+            { grade: "Pass", percent: 100.0 },
+            { grade: "Fail", percent: 0.0 },
+          ],
+          maxPoints
+        ),
       },
     ])
     .then((answer) => answer.score);
@@ -703,12 +722,20 @@ function gradePassFail(maxPoints) {
 
 function gradeLetter(maxPoints) {
   const SCALE = [
-    { grade: "A", percent: 100.0 },
-    { grade: "B", percent: 90.0 },
-    { grade: "C", percent: 80.0 },
-    { grade: "D", percent: 70.0 },
-    { grade: "F", percent: 60.0 },
-    { grade: "N", percent: 0.0 },
+    { grade: "A", percent: 100.0, description: "Exceeds" },
+    { grade: "A-", percent: 95.0, description: "Fully meets" },
+    { grade: "B+", percent: 87.0 },
+    { grade: "B", percent: 85.0, description: "Meets" },
+    { grade: "B-", percent: 83.0 },
+    { grade: "C+", percent: 77.0 },
+    { grade: "C", percent: 75.0, description: "Minimally meets" },
+    { grade: "C-", percent: 73.0 },
+    { grade: "D+", percent: 67.0 },
+    { grade: "D", percent: 65.0, description: "Partially meets" },
+    { grade: "D-", percent: 63.0 },
+    { grade: "F", percent: 60.0, description: "Shows effort" },
+    { grade: "1/3", percent: 33.3 },
+    { grade: "0", percent: 0.0, description: "No credit" },
   ];
 
   return inquirer
@@ -717,14 +744,8 @@ function gradeLetter(maxPoints) {
         type: "list",
         message: "Assign a grade",
         name: "score",
-        choices: () =>
-          SCALE.map((gr) =>
-            formatGradeChoice(
-              gr.grade,
-              (gr.percent / 100.0) * maxPoints,
-              maxPoints
-            )
-          ),
+        pageSize: 20,
+        choices: () => formatGradeChoices(SCALE, maxPoints),
       },
     ])
     .then((answer) => answer.score);
@@ -976,10 +997,7 @@ export function cli() {
         entries.push({ name: "Student", path: submissionStudentDir(student) });
       }
 
-      const maxLen = _(entries)
-        .map("name")
-        .map((n) => n.length)
-        .max();
+      const maxLen = longestValueLength(entries, "name");
 
       const rows = entries.map((e) => [
         chalk.blue(_.padStart(e.name, maxLen)),
