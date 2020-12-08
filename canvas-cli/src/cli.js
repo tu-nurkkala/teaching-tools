@@ -525,7 +525,8 @@ class ExtractHelper {
       name.includes(".git/") ||
       name.includes(".idea/") ||
       name.includes("/.DS_Store") ||
-      name.includes("/._")
+      name.includes("/._") ||
+      name.includes("/venv/")
     );
   }
 
@@ -653,6 +654,8 @@ async function downloadAndProcessOneAttachment(submission, attachment) {
     case "application/sql":
     case "text/javascript":
     case "text/plain":
+    case "text/x-python":
+    case "text/x-python-script":
     case "text/x-sql":
       extractHelper.addEntry(attachment.display_name, attachment.size);
       console.log("\t", chalk.green("No processing required"));
@@ -1047,7 +1050,7 @@ export function cli() {
     .option("--pager", "Open files in pager (default)")
     .option(
       "--scheme <scheme>",
-      chalk`Grading scheme: {blue points}, {blue passFail}, {blue letter}`,
+      chalk`Grading scheme: {blue points}, {blue passfail}, {blue letter}`,
       "points"
     )
     .action(async (userId, score, options) => {
@@ -1068,14 +1071,14 @@ export function cli() {
         case "points":
           gradingFunction = gradePoints;
           break;
-        case "passFail":
+        case "passfail":
           gradingFunction = gradePassFail;
           break;
         case "letter":
           gradingFunction = gradeLetter;
           break;
         default:
-          fatal(`Invalid grading scheme '${options.grade}'`);
+          fatal(`Invalid grading scheme '${options.scheme}'`);
       }
 
       function showViewer(student) {
