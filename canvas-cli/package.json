@@ -11,11 +11,12 @@
     "canvas-cli": "bin/canvas-cli"
   },
   "dependencies": {
+    "ansi-colors": "^4.1.1",
     "boxen": "^4.2.0",
-    "chalk": "^4.1.0",
     "commander": "^6.2.0",
     "debug": "^4.3.1",
     "dotenv": "^8.2.0",
+    "enquirer": "^2.3.6",
     "esm": "^3.2.25",
     "extract-zip": "^2.0.1",
     "fuse.js": "^6.4.3",

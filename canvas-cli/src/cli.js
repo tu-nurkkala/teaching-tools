@@ -2,9 +2,9 @@ import { config } from "dotenv";
 config();
 
 import got from "got";
-import inquirer from "inquirer";
+import { prompt, Select } from "enquirer";
 import _ from "lodash";
-import chalk from "chalk";
+import chalk from "ansi-colors";
 import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
 import untildify from "untildify";
@@ -705,22 +705,20 @@ function formatGradeChoices(scale, maxPoints) {
 }
 
 function gradePassFail(maxPoints) {
-  return inquirer
-    .prompt([
-      {
-        type: "list",
-        message: "Pass or fail",
-        name: "score",
-        choices: formatGradeChoices(
-          [
-            { grade: "Pass", percent: 100.0 },
-            { grade: "Fail", percent: 0.0 },
-          ],
-          maxPoints
-        ),
-      },
-    ])
-    .then((answer) => answer.score);
+  return prompt([
+    {
+      type: "list",
+      message: "Pass or fail",
+      name: "score",
+      choices: formatGradeChoices(
+        [
+          { grade: "Pass", percent: 100.0 },
+          { grade: "Fail", percent: 0.0 },
+        ],
+        maxPoints
+      ),
+    },
+  ]).then((answer) => answer.score);
 }
 
 function gradeLetter(maxPoints) {
@@ -741,40 +739,36 @@ function gradeLetter(maxPoints) {
     { grade: "0", percent: 0.0, description: "No credit" },
   ];
 
-  return inquirer
-    .prompt([
-      {
-        type: "list",
-        message: "Assign a grade",
-        name: "score",
-        pageSize: 20,
-        choices: () => formatGradeChoices(SCALE, maxPoints),
-      },
-    ])
-    .then((answer) => answer.score);
+  return prompt([
+    {
+      type: "list",
+      message: "Assign a grade",
+      name: "score",
+      pageSize: 20,
+      choices: () => formatGradeChoices(SCALE, maxPoints),
+    },
+  ]).then((answer) => answer.score);
 }
 
 function gradePoints(maxScore) {
-  return inquirer
-    .prompt([
-      {
-        type: "input",
-        message: `Enter score (0-${maxScore})`,
-        name: "score",
-        default: `${maxScore}`, // Placate validate.
-        validate: (entry) => {
-          if (!entry.match(/^[0-9]+(\.[0-9]*)?$/)) {
-            return "Not a valid score";
-          }
-          const value = parseFloat(entry);
-          if (!isScoreValid(value, maxScore)) {
-            return invalidScoreMessage(value, maxScore);
-          }
-          return true;
-        },
+  return prompt([
+    {
+      type: "input",
+      message: `Enter score (0-${maxScore})`,
+      name: "score",
+      default: `${maxScore}`, // Placate validate.
+      validate: (entry) => {
+        if (!entry.match(/^[0-9]+(\.[0-9]*)?$/)) {
+          return "Not a valid score";
+        }
+        const value = parseFloat(entry);
+        if (!isScoreValid(value, maxScore)) {
+          return invalidScoreMessage(value, maxScore);
+        }
+        return true;
       },
-    ])
-    .then((answer) => answer.score);
+    },
+  ]).then((answer) => answer.score);
 }
 
 async function showPager(student) {
@@ -790,7 +784,7 @@ async function showPager(student) {
     filePaths = [submissionPath(student, allFiles[0].name)];
   } else {
     while (filePaths.length === 0) {
-      const { files } = await inquirer.prompt([
+      const { files } = await prompt([
         {
           type: "checkbox",
           message: "Choose files to inspect",
@@ -827,7 +821,7 @@ async function confirmScore(student, score, maxScore) {
 
   const previousComments = db.get("current.assignment.comments").value();
   if (previousComments.length) {
-    const { selected } = await inquirer.prompt([
+    const { selected } = await prompt([
       {
         type: "checkbox",
         name: "selected",
@@ -838,7 +832,7 @@ async function confirmScore(student, score, maxScore) {
     currentComments.push(...selected);
   }
 
-  const { comment } = await inquirer.prompt([
+  const { comment } = await prompt([
     {
       type: "input",
       name: "comment",
@@ -851,7 +845,7 @@ async function confirmScore(student, score, maxScore) {
     db.get("current.assignment.comments").push(comment).write();
   }
 
-  const { confirmed } = await inquirer.prompt([
+  const { confirmed } = await prompt([
     {
       type: "confirm",
       name: "confirmed",
@@ -1050,7 +1044,10 @@ export function cli() {
     .option("--pager", "Open files in pager (default)")
     .option(
       "--scheme <scheme>",
-      chalk`Grading scheme: {blue points}, {blue passfail}, {blue letter}`,
+      "Grading scheme: " +
+        ["points", "passfail", "points"]
+          .map((scheme) => chalk.blue(scheme))
+          .join(", "),
       "points"
     )
     .action(async (userId, score, options) => {
@@ -1146,7 +1143,7 @@ export function cli() {
 
         while (_.size(remainingStudents) > 0) {
           showSeparator();
-          const answer = await inquirer.prompt([
+          const answer = await prompt([
             {
               type: "list",
               name: "student",
@@ -1206,6 +1203,12 @@ export function cli() {
     .alias("choose")
     .description("Set current values");
 
+  class SelectObject extends Select {
+    result() {
+      return this.focused.value;
+    }
+  }
+
   setCmd
     .command("assignment [id]")
     .description("Set the current assignment")
@@ -1218,21 +1221,18 @@ export function cli() {
           fatal(`No assignment with ID ${id}`);
         }
       } else {
-        await inquirer
-          .prompt([
-            {
-              type: "list",
-              name: "assignment",
-              message: `Choose an assignment (${allAssignments.length} available)`,
-              pageSize: 20,
-              choices: () =>
-                allAssignments.map((assignment) => ({
-                  name: formatAssignment(assignment),
-                  value: assignment,
-                })),
-            },
-          ])
-          .then((answer) => (selectedAssignment = answer.assignment));
+        const aPrompt = new SelectObject({
+          message: `Choose an assignment (${allAssignments.length} available)`,
+          choices: () =>
+            allAssignments.map((assignment) => ({
+              name: formatAssignment(assignment),
+              value: assignment,
+            })),
+        });
+
+        await aPrompt.run().then((answer) => {
+          selectedAssignment = answer;
+        });
       }
 
       const submissionSummary = await getSubmissionSummary(
@@ -1263,28 +1263,26 @@ export function cli() {
     .description("Set the current term")
     .action(async () => {
       const terms = await getEnrollmentTerms();
-      inquirer
-        .prompt([
-          {
-            type: "list",
-            name: "term",
-            message: "Choose a term",
-            pageSize: 10,
-            choices: () =>
-              terms.map((term) => ({
-                name: term.name,
-                value: term,
-              })),
-          },
-        ])
-        .then((answer) =>
-          db
-            .set("current.term", {
-              id: answer.term.id,
-              name: answer.term.name,
-            })
-            .write()
-        );
+      prompt([
+        {
+          type: "list",
+          name: "term",
+          message: "Choose a term",
+          pageSize: 10,
+          choices: () =>
+            terms.map((term) => ({
+              name: term.name,
+              value: term,
+            })),
+        },
+      ]).then((answer) =>
+        db
+          .set("current.term", {
+            id: answer.term.id,
+            name: answer.term.name,
+          })
+          .write()
+      );
     });
 
   setCmd
@@ -1292,7 +1290,7 @@ export function cli() {
     .description("Set current course")
     .action(async () => {
       const courses = await getCourses();
-      const answer = await inquirer.prompt([
+      const answer = await prompt([
         {
           type: "list",
           name: "course",
