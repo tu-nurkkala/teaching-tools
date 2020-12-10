@@ -1,3 +1,5 @@
+//@ts-nocheck
+
 import { config } from "dotenv";
 config();
 
@@ -8,25 +10,38 @@ import chalk from "chalk";
 import { sprintf } from "sprintf-js";
 import { DateTime } from "luxon";
 import untildify from "untildify";
-import { mkdirSync, statSync, createWriteStream, writeFileSync } from "fs";
-import { dirname } from "path";
-import parseLinkHeader from "parse-link-header";
+import { mkdirSync, createWriteStream, writeFileSync } from "fs";
+import { dirname, join } from "path";
 import { table } from "table";
-import queryString from "qs";
 import Fuse from "fuse.js";
 import extractZip from "extract-zip";
-import Debug from "debug";
 import prettyBytes from "pretty-bytes";
 import pluralize from "pluralize";
 import childProcess from "child_process";
-import boxen from "boxen";
-import ora from "ora";
+import boxen, { BorderStyle } from "boxen";
 import tar from "tar";
 import wrapText from "wrap-text";
 import dir from "node-dir";
-
+import CacheDb from "./cacheDb";
+import { listGroups, listStudents } from "./commands/list";
+import CanvasApi from "./api";
+import stream from "stream";
+import { promisify } from "util";
+import { debugCache, debugCli, debugDownload, debugExtract } from "./debug";
+import {
+  Assignment,
+  FileInfo,
+  Student,
+  StudentSubmission,
+  SubmissionType,
+} from "./types";
 import { program } from "commander";
 import { version } from "../package.json";
+import TurndownService from "turndown";
+
+const cache = new CacheDb();
+const api = new CanvasApi(cache);
+
 program.version(version);
 program.option("--api-chatter", "Show API actions");
 
@@ -38,205 +53,22 @@ prettyError.appendStyle({
   },
 });
 
-const debugCli = Debug("cli");
-const debugCache = debugCli.extend("cache");
-const debugNet = debugCli.extend("net");
-const debugExtract = debugCli.extend("extract");
-const debugDownload = debugCli.extend("download");
-
-import TurndownService from "turndown";
 const turndownService = new TurndownService({
   headingStyle: "atx",
 });
 
-import stream from "stream";
-import { promisify } from "util";
 const pipeline = promisify(stream.pipeline);
 
-import low from "lowdb";
-import FileSync from "lowdb/adapters/FileSync";
-import { join } from "path";
-
-const adapter = new FileSync("db.json");
-const db = low(adapter);
-
-db.defaults({
-  canvas: { account_id: 1 },
-}).write();
-
-const apiSpinner = ora();
-
-const api_client = got.extend({
-  prefixUrl: process.env["CANVAS_URL"] + "/api/v1",
-  headers: {
-    Authorization: `Bearer ${process.env["CANVAS_TOK"]}`,
-  },
-  responseType: "json",
-  hooks: {
-    beforeRequest: [
-      (options) => {
-        debugNet("Request options %O", options);
-        if (program.apiChatter) {
-          apiSpinner.start(
-            `Send ${chalk.blue(options.method)} request to ${chalk.blue(
-              options.url.href
-            )}`
-          );
-        }
-      },
-    ],
-    afterResponse: [
-      (response) => {
-        debugNet("Response %O", response);
-        if (program.apiChatter) {
-          apiSpinner.succeed();
-        }
-        return response;
-      },
-    ],
-    beforeError: [
-      (error) => {
-        console.log("ERROR", error);
-        if (program.apiChatter) {
-          apiSpinner.fail();
-        }
-      },
-    ],
-  },
-});
-
-function getCourses() {
-  return api_client
-    .get(`courses`, {
-      searchParams: { include: "term" },
-    })
-    .then((response) => {
-      const courses = response.body;
-      const termId = db.get("current.term.id").value();
-      return courses.filter((course) => course.term.id === termId);
-    })
-    .catch((err) => console.error(err));
-}
-
-function getEnrollmentTerms() {
-  const accountId = db.get("canvas.account_id").value();
-  return api_client
-    .get(`accounts/${accountId}/terms`)
-    .then((result) =>
-      _.sortBy(result.body.enrollment_terms, (term) => -term.id)
-    );
-}
-
-function getCurrentCourseId() {
-  return db.get("current.course.id").value();
-}
-
-function getStudent(studentId) {
-  return db.get(`current.course.students.${studentId}`).value();
-}
-
-function getCurrentAssignmentId() {
-  return db.get("current.assignment.id").value();
-}
-
-async function getAssignments() {
-  const courseId = getCurrentCourseId();
-  return _.sortBy(
-    await api_client.paginate.all(`courses/${courseId}/assignments`),
-    (asgn) => asgn.due_at
-  );
-}
-
-async function getGroupCategories(courseId) {
-  const groupCategoryById = _(
-    await api_client
-      .get(`courses/${courseId}/group_categories`)
-      .then((response) => response.body)
-  )
-    .map((grpCat) => {
-      const newCat = _.pick(grpCat, ["id", "name"]);
-      newCat.groups = [];
-      return newCat;
-    })
-    .keyBy("id")
-    .value();
-
-  const groups = (
-    await api_client
-      .get(`courses/${courseId}/groups`)
-      .then((response) => response.body)
-  ).map((grp) => {
-    const newGrp = _.pick(grp, ["id", "name", "members_count"]);
-    newGrp.members = [];
-    groupCategoryById[grp.group_category_id].groups.push(newGrp);
-    return newGrp;
-  });
-
-  for (const group of groups) {
-    (
-      await api_client
-        .get(`groups/${group.id}/users`)
-        .then((response) => response.body)
-    ).forEach((member) => {
-      const newMember = _.pick(member, ["id", "name", "sortable_name"]);
-      group.members.push(newMember);
-    });
-  }
-
-  db.set("current.course.groupCategories", groupCategoryById).write();
-  return groupCategoryById;
-}
-
-function getSubmissionSummary(assignmentId) {
-  const courseId = getCurrentCourseId();
-  return api_client
-    .get(`courses/${courseId}/assignments/${assignmentId}/submission_summary`)
-    .then((response) => response.body);
-}
-
-async function getStudents(courseId = getCurrentCourseId()) {
-  return api_client.paginate.all(`courses/${courseId}/students`);
-}
-
-function getOneStudent(id) {
-  const courseId = getCurrentCourseId();
-  return api_client
-    .get(`courses/${courseId}/users/${id}`)
-    .then((response) => response.body);
-}
-
-function getOneAssignment(id) {
-  const courseId = getCurrentCourseId();
-  return api_client
-    .get(`courses/${courseId}/assignments/${id}`)
-    .then((response) => response.body);
-}
-
-function getAssignmentGroups(courseId) {
-  return api_client.paginate.all(`courses/${courseId}/assignment_groups`);
-}
-
 function currentMaxScore() {
-  return db.get("current.assignment.points_possible").value();
+  return cache.get("assignment.points_possible").value();
 }
 
-function isScoreValid(score, maxScore) {
+function isScoreValid(score: number, maxScore: number) {
   return score >= 0 && score <= maxScore;
 }
 
-function invalidScoreMessage(score, maxScore) {
+function invalidScoreMessage(score: number, maxScore: number) {
   return `Invalid score [0 <= ${score} <= ${maxScore}]`;
-}
-
-function submissionUrl(userId) {
-  return [
-    "courses",
-    getCurrentCourseId(),
-    "assignments",
-    getCurrentAssignmentId(),
-    "submissions",
-    userId,
-  ].join("/");
 }
 
 async function processOneSubmission(submission, options) {
@@ -337,79 +169,29 @@ async function processOneSubmission(submission, options) {
   }
 }
 
-function gradeSubmission(userId, score, comment) {
+function gradeSubmission(userId: number, score: number, comment: string) {
   const maxScore = currentMaxScore();
   if (!isScoreValid(score, maxScore)) {
     fatal(invalidScoreMessage(score, maxScore));
   }
 
-  const parameters = {
-    submission: { posted_grade: score },
-  };
-  if (comment && comment.length > 0) {
-    parameters.comment = { text_comment: comment };
-  }
+  return api.gradeSubmission(userId, score, comment);
+}
 
-  return api_client
-    .put(submissionUrl(userId), {
-      searchParams: queryString.stringify(parameters),
+function cacheSubmission(sub: StudentSubmission) {
+  cache
+    .set(`course.students.${sub.user.id}.submission`, {
+      id: sub.id,
+      grade: sub.grade,
+      score: sub.score,
+      grader_id: sub.grader_id,
+      graded_at: sub.graded_at,
+      workflow_state: sub.workflow_state,
     })
-    .then((response) => response.body);
+    .write();
 }
 
-function cacheSubmission(sub) {
-  db.set(`current.course.students.${sub.user.id}.submission`, {
-    id: sub.id,
-    grade: sub.grade,
-    score: sub.score,
-    grader_id: sub.grader_id,
-    graded_at: sub.graded_at,
-    workflow_state: sub.workflow_state,
-  }).write();
-}
-
-function getOneSubmission(userId) {
-  return api_client
-    .get(submissionUrl(userId), {
-      searchParams: queryString.stringify(
-        { include: ["user", "course"] },
-        { arrayFormat: "brackets" }
-      ),
-    })
-    .then((response) => response.body);
-}
-
-function getSubmissions() {
-  const segments = [
-    "courses",
-    getCurrentCourseId(),
-    "assignments",
-    getCurrentAssignmentId(),
-    "submissions",
-  ];
-  const searchParamInclude = { "include[]": "user" };
-  return api_client.paginate.all(segments.join("/"), {
-    searchParams: searchParamInclude,
-    pagination: {
-      paginate: (response, allItems, currentItems) => {
-        const linkHeader = parseLinkHeader(response.headers.link);
-        let rtn = false;
-        if (linkHeader.hasOwnProperty("next")) {
-          rtn = {
-            searchParams: {
-              ...searchParamInclude,
-              page: +linkHeader.next.page,
-              per_page: 10,
-            },
-          };
-        }
-        return rtn;
-      },
-    },
-  });
-}
-
-function showElement(typeName, value, extraFields = []) {
+function showElement(typeName: string, value, extraFields = []) {
   const strings = [chalk.blue(sprintf("%10s", typeName))];
   if (value) {
     strings.push(chalk.bold(value.name));
@@ -424,11 +206,11 @@ function showElement(typeName, value, extraFields = []) {
   console.log(strings.join(" "));
 }
 
-function isoDateTimeToDate(dt) {
+function isoDateTimeToDate(dt: string) {
   return DateTime.fromISO(dt).toISODate();
 }
 
-function formatAssignment(assignment) {
+function formatAssignment(assignment: Assignment) {
   const strings = [
     chalk.gray(isoDateTimeToDate(assignment.due_at)),
     assignment.name,
@@ -445,7 +227,7 @@ function formatAssignment(assignment) {
   return strings.join(" ");
 }
 
-function formatSubmissionType(subType) {
+function formatSubmissionType(subType: SubmissionType) {
   const map = {
     online_upload: chalk.blue("upload"),
     online_text_entry: chalk.green("text"),
@@ -464,14 +246,11 @@ function formatSubmissionTypes(submissionTypes) {
 }
 
 function showCurrentState() {
-  const current = db.get("current").value();
-  showElement("Term", current.term);
-  showElement("Course", current.course);
-  showElement("Assignment", current.assignment);
-  console.log(
-    chalk.blue("       URL"),
-    chalk.yellow(current.assignment.html_url)
-  );
+  const assignment = cache.getAssignment();
+  showElement("Term", cache.getTerm().id);
+  showElement("Course", cache.getCourse().id);
+  showElement("Assignment", assignment.id);
+  console.log(chalk.blue("       URL"), chalk.yellow(assignment.html_url));
 }
 
 function submissionBaseDir() {
@@ -481,45 +260,54 @@ function submissionBaseDir() {
 function submissionCourseDir() {
   return join(
     submissionBaseDir(),
-    sanitizeString(db.get("current.course.course_code").value())
+    sanitizeString(cache.get("course.course_code").value())
   );
 }
 
 function submissionAssignmentDir() {
   return join(
     submissionCourseDir(),
-    sanitizeString(db.get("current.assignment.name").value())
+    sanitizeString(cache.get("assignment.name").value())
   );
 }
 
-function submissionStudentDir(student) {
+function submissionStudentDir(student: Student) {
   return join(submissionAssignmentDir(), sanitizeString(student.sortable_name));
 }
 
-function submissionDir(student) {
+function submissionDir(student: Student) {
   // This looks dumb, but would allow future expansion.
   const finalDir = submissionStudentDir(student);
   mkdirSync(finalDir, { recursive: true });
   return finalDir;
 }
 
-function submissionPath(user, fileName) {
-  return join(submissionDir(user), fileName);
+function submissionPath(student: Student, fileName: string) {
+  return join(submissionDir(student), fileName);
 }
 
-function downloadOneAttachment(url, absPath) {
+function downloadOneAttachment(url: string, absPath: string) {
   debugDownload(absPath);
   return pipeline(got.stream(url), createWriteStream(absPath));
 }
 
+interface ExtractInfo {
+  extracted: number;
+  skipped: number;
+}
+
 class ExtractHelper {
+  studentFiles: FileInfo[];
+  files: ExtractInfo;
+  bytes: ExtractInfo;
+
   constructor() {
     this.studentFiles = [];
     this.files = { extracted: 0, skipped: 0 };
     this.bytes = { extracted: 0, skipped: 0 };
   }
 
-  skipEntry(name) {
+  skipEntry(name: string) {
     return (
       name.includes("node_modules/") ||
       name.includes(".git/") ||
@@ -530,7 +318,7 @@ class ExtractHelper {
     );
   }
 
-  addEntry(name, size) {
+  addEntry(name: string, size: number) {
     if (this.skipEntry(name)) {
       this.files.skipped += 1;
       this.bytes.skipped += size;
@@ -574,18 +362,18 @@ class ExtractHelper {
 }
 
 function dbStudentFilePath(submission) {
-  return `current.course.students.${submission.user.id}.files`;
+  return `course.students.${submission.user.id}.files`;
 }
 
 function clearStudentFiles(submission) {
   debugCache("Clear student files");
-  db.set(dbStudentFilePath(submission), []).write();
+  cache.set(dbStudentFilePath(submission), []).write();
 }
 
 function cacheOneStudentFile(submission, name, size) {
   const entry = { name, size };
   debugCache("Cache %O", entry);
-  db.get(dbStudentFilePath(submission)).push(entry).write();
+  cache.get(dbStudentFilePath(submission)).push(entry).write();
 }
 
 function writeAndCacheOneStudentFile(submission, name, content) {
@@ -704,7 +492,7 @@ function formatGradeChoices(scale, maxPoints) {
   });
 }
 
-function gradePassFail(maxPoints) {
+function gradePassFail(maxPoints): Promise<number> {
   return inquirer
     .prompt([
       {
@@ -723,7 +511,7 @@ function gradePassFail(maxPoints) {
     .then((answer) => answer.score);
 }
 
-function gradeLetter(maxPoints) {
+function gradeLetter(maxPoints): Promise<number> {
   const SCALE = [
     { grade: "A", percent: 100.0, description: "Exceeds" },
     { grade: "A-", percent: 95.0, description: "Fully meets" },
@@ -754,7 +542,7 @@ function gradeLetter(maxPoints) {
     .then((answer) => answer.score);
 }
 
-function gradePoints(maxScore) {
+function gradePoints(maxScore: number): Promise<number> {
   return inquirer
     .prompt([
       {
@@ -825,7 +613,7 @@ async function confirmScore(student, score, maxScore) {
 
   const currentComments = [];
 
-  const previousComments = db.get("current.assignment.comments").value();
+  const previousComments = cache.get("assignment.comments").value();
   if (previousComments.length) {
     const { selected } = await inquirer.prompt([
       {
@@ -848,7 +636,7 @@ async function confirmScore(student, score, maxScore) {
 
   if (comment) {
     currentComments.push(comment);
-    db.get("current.assignment.comments").push(comment).write();
+    cache.get("assignment.comments").push(comment).write();
   }
 
   const { confirmed } = await inquirer.prompt([
@@ -883,8 +671,8 @@ function makeBox(color, prefix, message) {
   const wrappedMessage = wrapText(`${prefix} - ${message}`);
   return boxen(chalk.keyword(color)(wrappedMessage), {
     borderColor: color,
-    borderStyle: "round",
-    padding: { left: 1, right: 1 },
+    borderStyle: BorderStyle.Round,
+    padding: { top: 0, right: 1, bottom: 0, left: 1 },
   });
 }
 
@@ -901,8 +689,9 @@ function showSeparator() {
   console.log(chalk.blue("-".repeat(80)));
 }
 
-export function cli() {
-  showCurrentState();
+export default function cli() {
+  // FIXME - Re-enable this.
+  // showCurrentState();
 
   program
     .command("current")
@@ -915,8 +704,8 @@ export function cli() {
     .command("assignments")
     .description("List assignments")
     .action(async () => {
-      const groups = db.get("current.course.assignment_groups").value();
-      const assignments = await getAssignments();
+      const groups = cache.get("course.assignment_groups").value();
+      const assignments = await api.getAssignments();
       const rows = assignments.map((a) => [
         a.id,
         a.needs_grading_count
@@ -934,30 +723,12 @@ export function cli() {
   listCmd
     .command("students")
     .description("List students")
-    .action(async () => {
-      const students = _.sortBy(await getStudents(getCurrentCourseId()), (s) =>
-        s.sortable_name.toLowerCase()
-      );
-      const rows = students.map((s) => [s.id, s.name]);
-      console.log(table(rows, { singleLine: true }));
-    });
+    .action(() => listStudents(cache));
 
   listCmd
     .command("groups")
     .description("List all groups/members")
-    .action(() => {
-      const groupCategories = db.get("current.course.groupCategories").value();
-      const rows = [];
-
-      for (let grpCat of _.values(groupCategories)) {
-        for (let grp of grpCat.groups) {
-          for (let member of grp.members) {
-            rows.push([grpCat.name, grp.name, member.name]);
-          }
-        }
-      }
-      console.log(table(rows, { singleLine: true }));
-    });
+    .action(() => listGroups(cache));
 
   const showCmd = program.command("show").description("Show details");
 
@@ -965,7 +736,7 @@ export function cli() {
     .command("submission <userId>")
     .description("Show details of submission from user <userId>")
     .action(async (userId) => {
-      const submission = await getOneSubmission(userId);
+      const submission = await api.getOneSubmission(userId);
       console.log(submission);
     });
 
@@ -973,7 +744,7 @@ export function cli() {
     .command("assignment <id>")
     .description("Show details of assignment <id>")
     .action(async (id) => {
-      const assignment = await getOneAssignment(id);
+      const assignment = await api.getOneAssignment(id);
       console.log(assignment);
     });
 
@@ -981,7 +752,7 @@ export function cli() {
     .command("student <id>")
     .description("Show details of student <id>")
     .action(async (id) => {
-      const student = await getOneStudent(id);
+      const student = await api.getOneStudent(id);
       console.log(student);
     });
 
@@ -996,7 +767,7 @@ export function cli() {
       ];
 
       if (studentId) {
-        const student = getStudent(studentId);
+        const student = cache.getStudent(studentId);
         entries.push({ name: "Student", path: submissionStudentDir(student) });
       }
 
@@ -1014,7 +785,7 @@ export function cli() {
     .command("tree <studentId>")
     .description("Show tree view of downloaded files")
     .action((studentId) => {
-      const baseDir = submissionStudentDir(getStudent(studentId));
+      const baseDir = submissionStudentDir(cache.getStudent(studentId));
       dir.files(baseDir, (err, files) => {
         if (err) throw err;
         files.forEach((f) => console.log(f));
@@ -1028,14 +799,14 @@ export function cli() {
     .alias("search")
     .description("Find student using fuzzy match")
     .action(async (fuzzy) => {
-      const students = await getStudents();
+      const students = await api.getStudents();
       const fuse = new Fuse(students, {
         includeScore: true,
         ignoreLocation: true,
         threshold: 0.01,
         keys: ["name", "sortable_name", "short_name", "login_id"],
       });
-      const result = fuse.search(fuzzy);
+      const result = fuse.search<Student>(fuzzy);
       const rows = result.map((elt) => [elt.item.id, elt.score, elt.item.name]);
       console.log(table(rows, { singleLine: true }));
     });
@@ -1066,7 +837,7 @@ export function cli() {
         }
       }
 
-      let gradingFunction = null;
+      let gradingFunction;
       switch (options.scheme) {
         case "points":
           gradingFunction = gradePoints;
@@ -1095,7 +866,7 @@ export function cli() {
           fatal("Specific `userId` also requires `score`.");
         }
 
-        const student = getStudent(userId);
+        const student = cache.getStudent(userId);
         if (!student) {
           fatal(`No cached student with id ${userId}`);
         }
@@ -1106,7 +877,7 @@ export function cli() {
         // Grade multiple students.
         const allStudents = [];
         for (const [id, student] of Object.entries(
-          db.get("current.course.students").value()
+          cache.get("course.students").value()
         )) {
           allStudents.push(student);
         }
@@ -1176,7 +947,7 @@ export function cli() {
             );
             gradedStudents.push(gradedStudent);
 
-            const updatedSubmission = await getOneSubmission(student.id);
+            const updatedSubmission = await api.getOneSubmission(student.id);
             cacheSubmission(updatedSubmission);
           }
         }
@@ -1193,9 +964,12 @@ export function cli() {
     .option("--show-details", "Show submission details")
     .action(async (studentId, options) => {
       if (studentId) {
-        await processOneSubmission(await getOneSubmission(studentId), options);
+        await processOneSubmission(
+          await api.getOneSubmission(studentId),
+          options
+        );
       } else {
-        for (const submission of await getSubmissions()) {
+        for (const submission of await api.getSubmissions()) {
           await processOneSubmission(submission, options);
         }
       }
@@ -1210,7 +984,7 @@ export function cli() {
     .command("assignment [id]")
     .description("Set the current assignment")
     .action(async (id) => {
-      const allAssignments = await getAssignments();
+      const allAssignments = await api.getAssignments();
       let selectedAssignment = null;
       if (id) {
         selectedAssignment = allAssignments.find((a) => a.id === +id);
@@ -1235,7 +1009,7 @@ export function cli() {
           .then((answer) => (selectedAssignment = answer.assignment));
       }
 
-      const submissionSummary = await getSubmissionSummary(
+      const submissionSummary = await api.getSubmissionSummary(
         selectedAssignment.id
       );
 
@@ -1252,7 +1026,7 @@ export function cli() {
         .set("submission_summary", submissionSummary)
         .set("comments", []);
 
-      db.set("current.assignment", dbData).write();
+      cache.set("assignment", dbData).write();
       console.log(
         chalk.green(`Current assignment now '${selectedAssignment.name}'`)
       );
@@ -1262,7 +1036,7 @@ export function cli() {
     .command("term")
     .description("Set the current term")
     .action(async () => {
-      const terms = await getEnrollmentTerms();
+      const terms = await api.getEnrollmentTerms();
       inquirer
         .prompt([
           {
@@ -1278,8 +1052,8 @@ export function cli() {
           },
         ])
         .then((answer) =>
-          db
-            .set("current.term", {
+          cache
+            .set("term", {
               id: answer.term.id,
               name: answer.term.name,
             })
@@ -1291,7 +1065,7 @@ export function cli() {
     .command("course")
     .description("Set current course")
     .action(async () => {
-      const courses = await getCourses();
+      const courses = await api.getCourses();
       const answer = await inquirer.prompt([
         {
           type: "list",
@@ -1305,18 +1079,20 @@ export function cli() {
             })),
         },
       ]);
-      const groups = await getAssignmentGroups(answer.course.id);
-      const students = await getStudents(answer.course.id);
-      const groupCategories = await getGroupCategories(answer.course.id);
+      const groups = await api.getAssignmentGroups(answer.course.id);
+      const students = await api.getStudents(answer.course.id);
+      const groupCategories = await api.getGroupCategories(answer.course.id);
 
-      db.set("current.course", {
-        id: answer.course.id,
-        name: answer.course.name,
-        course_code: answer.course.course_code,
-        assignment_groups: _.keyBy(groups, (elt) => elt.id),
-        students: _.keyBy(students, (elt) => elt.id),
-        groupCategories,
-      }).write();
+      cache
+        .set("course", {
+          id: answer.course.id,
+          name: answer.course.name,
+          course_code: answer.course.course_code,
+          assignment_groups: _.keyBy(groups, (elt) => elt.id),
+          students: _.keyBy(students, (elt) => elt.id),
+          groupCategories,
+        })
+        .write();
     });
 
   program.parse(process.argv);
