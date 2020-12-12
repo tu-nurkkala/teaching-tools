@@ -1,4 +1,4 @@
-//@ts-nocheck
+// @ts-nocheck
 
 import got, { Got } from "got";
 import { program } from "commander";
@@ -17,8 +17,9 @@ import {
   Student,
   Submission,
   SubmissionSummary,
-  Term,
 } from "./types";
+import TermResource from "./entities/Term";
+import { plainToClass } from "class-transformer";
 
 const apiSpinner = ora();
 
@@ -94,13 +95,21 @@ export default class CanvasApi {
       .catch((err) => console.error(err));
   }
 
-  getEnrollmentTerms(): Promise<Term[]> {
+  async getEnrollmentTerms() {
     const accountId = this.cache.get("canvas.account_id").value();
-    return this.apiClient
-      .get(`accounts/${accountId}/terms`)
-      .then((result) =>
-        _.sortBy(result.body.enrollment_terms, (term) => -term.id)
-      );
+    const result = await this.apiClient.get<{
+      enrollment_terms: TermResource[];
+    }>(`accounts/${accountId}/terms`);
+
+    for (const termData of result.body.enrollment_terms) {
+      const tr = plainToClass(TermResource, termData, {
+        excludeExtraneousValues: true,
+      });
+      console.log("-".repeat(20));
+      console.log("TERM DATA", termData);
+      console.log("TERM RESOURCE", tr);
+    }
+    return _.sortBy(result.body.enrollment_terms, (term) => -term.id);
   }
 
   async getAssignments(): Promise<Assignment[]> {

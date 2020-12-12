@@ -2,7 +2,8 @@ import low, { LowdbSync } from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
 
 import Debug from "debug";
-import { Assignment, Cache, Course, Student, Term } from "./types";
+import { Assignment, Cache, Course, Student } from "./types";
+import TermResource from "./entities/Term";
 const debug = Debug("cli:cache");
 
 export default class CacheDb {
@@ -32,7 +33,7 @@ export default class CacheDb {
     return this.db.set(path, value);
   }
 
-  getTerm(): Term {
+  getTerm(): TermResource {
     return this.get("term").value();
   }
 

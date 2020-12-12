@@ -7,8 +7,9 @@
     "outDir": "dist",
     "sourceMap": true,
     "declaration": true,
-    "declarationMap": false
+    "declarationMap": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
-
   "include": ["src/*.ts"]
 }
