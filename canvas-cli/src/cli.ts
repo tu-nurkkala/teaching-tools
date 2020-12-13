@@ -38,6 +38,7 @@ import {
 import { program } from "commander";
 import { version } from "../package.json";
 import TurndownService from "turndown";
+import TermResource from "./entities/Term";
 
 const cache = new CacheDb();
 const api = new CanvasApi(cache);
@@ -978,6 +979,7 @@ export default function cli() {
   const setCmd = program
     .command("select")
     .alias("choose")
+    .alias("set")
     .description("Set current values");
 
   setCmd
@@ -1037,28 +1039,26 @@ export default function cli() {
     .description("Set the current term")
     .action(async () => {
       const terms = await api.getEnrollmentTerms();
-      inquirer
-        .prompt([
-          {
-            type: "list",
-            name: "term",
-            message: "Choose a term",
-            pageSize: 10,
-            choices: () =>
-              terms.map((term) => ({
-                name: term.name,
-                value: term,
-              })),
-          },
-        ])
-        .then((answer) =>
-          cache
-            .set("term", {
-              id: answer.term.id,
-              name: answer.term.name,
-            })
-            .write()
-        );
+      const answers = await inquirer.prompt<{ term: TermResource }>([
+        {
+          type: "list",
+          name: "term",
+          message: "Choose a term",
+          pageSize: 10,
+          choices: () =>
+            terms.map((term) => ({
+              name: term,
+              value: term,
+            })),
+        },
+      ]);
+      cache
+        .set("term", {
+          id: answers.term.id,
+          name: answers.term.name,
+        })
+        .write();
+      return answers.term;
     });
 
   setCmd

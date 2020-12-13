@@ -10,7 +10,7 @@ function dumpProtoMetadata(msge: string, target: Object) {
   console.log(`/-------- ${msge} ----------`);
   console.log(ac.yellow("PROTO TARGET"), target);
   for (const key of keys) {
-    console.log("KEY: ", ac.red(key));
+    console.log(ac.yellow("KEY:"), ac.red(key));
     const value = Reflect.getMetadata(key, target);
     console.log("\t", value);
   }
@@ -21,7 +21,7 @@ function dumpPropMetadata(msge: string, target: Object, propKey: string) {
   console.log(`/-------- ${msge} ----------`);
   console.log(ac.yellow("PROP TARGET"), target, " - ", propKey);
   for (const key of keys) {
-    console.log("KEY: ", ac.red(key));
+    console.log(ac.yellow("KEY:"), ac.red(key));
     console.log("\t", Reflect.getMetadata(key, target, propKey));
   }
 }
@@ -101,3 +101,8 @@ const calc = new FourFunction(17, 42);
 console.log(calc.add());
 console.log(calc.sub("aleph", "beth"));
 console.log(calc.mul());
+
+console.log("PROP DESCS", Object.getOwnPropertyDescriptors(calc));
+console.log("PROP NAMES", Object.getOwnPropertyNames(calc));
+console.log("PROP SYMBS", Object.getOwnPropertySymbols(calc));
+console.log("PROTOTYPE", Object.getPrototypeOf(calc));

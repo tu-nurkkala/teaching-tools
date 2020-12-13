@@ -101,15 +101,14 @@ export default class CanvasApi {
       enrollment_terms: TermResource[];
     }>(`accounts/${accountId}/terms`);
 
-    for (const termData of result.body.enrollment_terms) {
-      const tr = plainToClass(TermResource, termData, {
+    const termResources = result.body.enrollment_terms.map((termPlain) => {
+      const termCls = plainToClass(TermResource, termPlain, {
         excludeExtraneousValues: true,
       });
-      console.log("-".repeat(20));
-      console.log("TERM DATA", termData);
-      console.log("TERM RESOURCE", tr);
-    }
-    return _.sortBy(result.body.enrollment_terms, (term) => -term.id);
+      return termCls;
+    });
+    return termResources;
+    // return _.sortBy(termResources, (tr) => -tr.id);
   }
 
   async getAssignments(): Promise<Assignment[]> {
