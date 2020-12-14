@@ -2,8 +2,8 @@ import low, { LowdbSync } from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
 
 import Debug from "debug";
-import { Assignment, Cache } from "./types";
-import Term from "./entities/Term";
+import { Assignment, Cache } from "./entities/Assignment";
+import { Term } from "./entities/Term";
 import { Course } from "./entities/Course";
 import { Student } from "./entities/Student";
 import { Trace } from "./Trace";

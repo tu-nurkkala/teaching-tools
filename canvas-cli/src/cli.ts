@@ -34,7 +34,7 @@ import {
   Student,
   StudentSubmission,
   SubmissionType,
-} from "./types";
+} from "./entities/Assignment";
 import { program } from "commander";
 import { version } from "../package.json";
 import TurndownService from "turndown";
@@ -1079,26 +1079,7 @@ export default function cli() {
             })),
         },
       ]);
-
-      // const assignmentGroups = await api.getAssignmentGroups(answers.course.id);
-
-      // const students = await api.getStudents(answers.course.id);
-
-      // const groupCategories = await api.getGroupCategories(answers.course.id);
-
-      const groups = await api.getGroups(answers.course.id);
-
-      return; ///////////////////////
-      cache
-        .set("course", {
-          id: answers.course.id,
-          name: answers.course.name,
-          course_code: answers.course.course_code,
-          assignment_groups: _.keyBy(groups, (elt) => elt.id),
-          students: _.keyBy(students, (elt) => elt.id),
-          groupCategories,
-        })
-        .write();
+      // FIXME - Cache course.
     });
 
   program.parse(process.argv);

@@ -9,13 +9,7 @@ import { debugNet } from "./debug";
 import CacheDb from "./cacheDb";
 import queryString from "qs";
 import parseLinkHeader from "parse-link-header";
-import {
-  Assignment,
-  GroupCategory,
-  Submission,
-  SubmissionSummary,
-} from "./types";
-import Term from "./entities/Term";
+import { Term } from "./entities/Term";
 import { plainToClass } from "class-transformer";
 import { APIAssignmentGroup, APICourse, Course } from "./entities/Course";
 import { APIStudent, Student } from "./entities/Student";
@@ -24,10 +18,16 @@ import {
   APIGroupCategory,
   APIGroupMember,
   Group,
+  GroupCategory,
   GroupMember,
 } from "./entities/Group";
 import { Promise } from "bluebird";
 import { Trace } from "./Trace";
+import {
+  Assignment,
+  Submission,
+  SubmissionSummary,
+} from "./entities/Assignment";
 
 const apiSpinner = ora();
 
@@ -112,7 +112,6 @@ export default class CanvasApi {
   }
 
   // Get enrollment terms in reverse chronological order.
-  @Trace({ depth: 1 })
   async getTerms() {
     const accountId = this.cache.get("canvas.account_id").value();
     const response = await this.apiClient.get<{ enrollment_terms: Term[] }>(
@@ -126,69 +125,61 @@ export default class CanvasApi {
     return terms.sort((a, b) => b.start_at.toMillis() - a.start_at.toMillis());
   }
 
-  @Trace()
-  getCourses(termId: number) {
+  apiGetCourses(termId: number) {
     return this.apiClient
-      .get<APICourse[]>(`courses`, {
-        searchParams: { include: "term" },
-      })
-      .then((response) =>
-        response.body
-          .filter((c) => c.term.id === termId)
-          .map((c) =>
-            plainToClass(Course, c, { excludeExtraneousValues: true })
-          )
-      );
+      .get<APICourse[]>(`courses`, { searchParams: { include: "term" } })
+      .then((response) => response.body);
   }
 
-  @Trace()
+  getCourses(termId: number) {
+    return this.apiGetCourses(termId).then((courses) =>
+      courses
+        .filter((c) => c.term.id === termId)
+        .map((c) => plainToClass(Course, c, { excludeExtraneousValues: true }))
+    );
+  }
+
   getAssignmentGroups(courseId: number) {
     return this.apiClient.paginate.all<APIAssignmentGroup>(
       `courses/${courseId}/assignment_groups`
     );
   }
 
-  @Trace()
   getStudents(courseId: number) {
     return this.apiClient.paginate.all<APIStudent>(
       `courses/${courseId}/students`
     );
   }
 
-  apiGetGroupCategories = (courseId: number) =>
-    this.apiClient
+  apiGetGroupCategories(courseId: number) {
+    return this.apiClient
       .get<APIGroupCategory[]>(`courses/${courseId}/group_categories`)
       .then((response) => response.body);
-
-  @Trace({ depth: 7 })
-  XapiGetGroups(courseId: number) {
-    return this.apiClient
-      .get<APIGroup[]>(`courses/${courseId}/groups`)
-      .then((response) => response.body)
-      .then((groups) =>
-        Promise.map(groups, (group) => this.apiGetGroupMembers(group.id))
-      )
-      .then((foo) => console.log(foo));
   }
 
-  @Trace()
   apiGetGroups(courseId: number) {
     return this.apiClient
       .get<APIGroup[]>(`courses/${courseId}/groups`)
       .then((response) => response.body);
   }
 
-  @Trace()
   apiGetGroupMembers(groupId: number) {
     return this.apiClient
       .get<APIGroupMember[]>(`groups/${groupId}/users`)
       .then((response) => response.body);
   }
 
-  // @Trace()
+  async apiGetGroupsWithMembers(courseId: number) {
+    const apiGroups = await this.apiGetGroups(courseId);
+    for (const apiGroup of apiGroups) {
+      apiGroup.members = await this.apiGetGroupMembers(apiGroup.id);
+    }
+    return apiGroups;
+  }
+
   async getGroupCategories(courseId: number) {
     const apiGroupCategories = await this.apiGetGroupCategories(courseId);
-    const apiGroups = await this.apiGetGroups(courseId);
+    const apiGroups = await this.apiGetGroupsWithMembers(courseId);
 
     for (const apiGroupCategory of apiGroupCategories) {
       apiGroupCategory.groups = apiGroups.filter(
@@ -196,21 +187,17 @@ export default class CanvasApi {
       );
     }
 
-    return apiGroupCategories;
-  }
-
-  @Trace({ depth: 3 })
-  async getGroups(courseId: number) {
-    const apiGroups = await this.apiGetGroups(courseId);
-    for (const apiGroup of apiGroups) {
-      apiGroup.members = await this.apiGetGroupMembers(apiGroup.id);
-    }
-    return apiGroups.map((g) =>
-      plainToClass(Group, g, { excludeExtraneousValues: true })
+    return apiGroupCategories.map((grpCat) =>
+      plainToClass(GroupCategory, grpCat, { excludeExtraneousValues: true })
     );
   }
 
-  @Trace()
+  async getGroups(courseId: number) {
+    return this.apiGetGroupsWithMembers.map((grp) =>
+      plainToClass(Group, grp, { excludeExtraneousValues: true })
+    );
+  }
+
   getGroupMembers(groupId: number) {
     return this.apiGetGroupMembers(groupId).then((groupMembers) =>
       groupMembers.map((groupMember) =>
@@ -229,46 +216,6 @@ export default class CanvasApi {
       await this.apiClient.paginate.all(`courses/${courseId}/assignments`),
       (a) => a.due_at
     );
-  }
-
-  async getGroupCategoriesOLD(courseId: number): Promise<GroupCategory[]> {
-    const groupCategoryById = _(
-      await this.apiClient
-        .get(`courses/${courseId}/group_categories`)
-        .then((response) => response.body)
-    )
-      .map((grpCat) => {
-        const newCat = _.pick(grpCat, ["id", "name"]);
-        newCat.groups = [];
-        return newCat;
-      })
-      .keyBy("id")
-      .value();
-
-    const groups = (
-      await this.apiClient
-        .get(`courses/${courseId}/groups`)
-        .then((response) => response.body)
-    ).map((grp) => {
-      const newGrp = _.pick(grp, ["id", "name", "members_count"]);
-      newGrp.members = [];
-      groupCategoryById[grp.group_category_id].groups.push(newGrp);
-      return newGrp;
-    });
-
-    for (const group of groups) {
-      (
-        await this.apiClient
-          .get(`groups/${group.id}/users`)
-          .then((response) => response.body)
-      ).forEach((member) => {
-        const newMember = _.pick(member, ["id", "name", "sortable_name"]);
-        group.members.push(newMember);
-      });
-    }
-
-    this.cache.set("course.groupCategories", groupCategoryById).write();
-    return groupCategoryById;
   }
 
   getSubmissionSummary(assignmentId: number): Promise<SubmissionSummary> {

@@ -5,8 +5,10 @@
 //   group_categories: Dictionary<GroupCategory>;
 // }
 
-import { Expose } from "class-transformer";
-import { Dictionary } from "../types";
+import {Expose, Type} from "class-transformer";
+import { Dictionary } from "./Assignment";
+import { Student } from "./Student";
+import { GroupCategory } from "./Group";
 
 export class AssignmentGroup {
   @Expose() id: number = 0;
@@ -18,10 +20,14 @@ export class Course {
   @Expose() name: string = "";
   @Expose() course_code: string = "";
 
+  @Expose()
   assignment_groups: Dictionary<AssignmentGroup> = {};
 
-  //   students: Dictionary<Student>;
-  //   group_categories: Dictionary<GroupCategory>;
+  @Expose()
+  students: Dictionary<Student> = {};
+
+  @Expose()
+  group_categories: Dictionary<GroupCategory> = {};
 }
 
 export interface APICourse {

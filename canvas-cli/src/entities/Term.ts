@@ -5,7 +5,7 @@ import ac from "ansi-colors";
 const asDateTime = (value: string) => DateTime.fromISO(value);
 const epoch = DateTime.fromSeconds(0);
 
-export default class Term {
+export class Term {
   @Expose()
   id: number = 0;
 
