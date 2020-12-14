@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import ac from "ansi-colors";
+import { Trace } from "../../src/Trace";
 
 function print(msge: string, ...args: any[]) {
   console.log(`${msge}:`, args.join(" "));
@@ -39,6 +40,7 @@ function DecorateInstanceMethod(
   // print("INST METH", target, name, propDesc);
   let type = Reflect.getMetadata("design:type", target, name);
   dumpPropMetadata("INST METH", target, name);
+  return propDesc;
 }
 
 function DecorateStaticProperty(target: Object, name: string) {
@@ -85,7 +87,7 @@ class FourFunction {
     return this.a + this.b;
   }
 
-  @DecorateInstanceMethod
+  @Trace()
   sub(alpha: string, beta: string): number {
     console.log(alpha, beta);
     return this.a - this.b;

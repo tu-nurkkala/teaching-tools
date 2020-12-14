@@ -11,15 +11,23 @@ import queryString from "qs";
 import parseLinkHeader from "parse-link-header";
 import {
   Assignment,
-  AssignmentGroup,
-  Course,
   GroupCategory,
-  Student,
   Submission,
   SubmissionSummary,
 } from "./types";
-import TermResource from "./entities/Term";
+import Term from "./entities/Term";
 import { plainToClass } from "class-transformer";
+import { APIAssignmentGroup, APICourse, Course } from "./entities/Course";
+import { APIStudent, Student } from "./entities/Student";
+import {
+  APIGroup,
+  APIGroupCategory,
+  APIGroupMember,
+  Group,
+  GroupMember,
+} from "./entities/Group";
+import { Promise } from "bluebird";
+import { Trace } from "./Trace";
 
 const apiSpinner = ora();
 
@@ -36,6 +44,27 @@ export default class CanvasApi {
         Authorization: `Bearer ${process.env["CANVAS_TOK"]}`,
       },
       responseType: "json",
+      pagination: {
+        paginate: (response, allItems, currentItems) => {
+          let rtn = false;
+          if (response.headers.link) {
+            const linkHeader = parseLinkHeader(response.headers.link as string);
+            if (linkHeader.hasOwnProperty("next")) {
+              if (program.apiChatter) {
+                console.log(`Page to ${linkHeader.next.url}`);
+              }
+              rtn = {
+                searchParams: {
+                  ...searchParamInclude,
+                  page: +linkHeader.next.page,
+                  per_page: 10,
+                },
+              };
+            }
+          }
+          return rtn;
+        },
+      },
       hooks: {
         beforeRequest: [
           (options) => {
@@ -82,34 +111,117 @@ export default class CanvasApi {
     ].join("/");
   }
 
-  getCourses(): Promise<Course[]> {
+  // Get enrollment terms in reverse chronological order.
+  @Trace({ depth: 1 })
+  async getTerms() {
+    const accountId = this.cache.get("canvas.account_id").value();
+    const response = await this.apiClient.get<{ enrollment_terms: Term[] }>(
+      `accounts/${accountId}/terms`
+    );
+
+    const terms = response.body.enrollment_terms.map((plainTerm) =>
+      plainToClass(Term, plainTerm, { excludeExtraneousValues: true })
+    );
+
+    return terms.sort((a, b) => b.start_at.toMillis() - a.start_at.toMillis());
+  }
+
+  @Trace()
+  getCourses(termId: number) {
     return this.apiClient
-      .get(`courses`, {
+      .get<APICourse[]>(`courses`, {
         searchParams: { include: "term" },
       })
-      .then((response) => {
-        const courses = response.body;
-        const termId = this.cache.get("term.id").value();
-        return courses.filter((course) => course.term.id === termId);
-      })
-      .catch((err) => console.error(err));
+      .then((response) =>
+        response.body
+          .filter((c) => c.term.id === termId)
+          .map((c) =>
+            plainToClass(Course, c, { excludeExtraneousValues: true })
+          )
+      );
   }
 
-  async getEnrollmentTerms() {
-    const accountId = this.cache.get("canvas.account_id").value();
-    const result = await this.apiClient.get<{
-      enrollment_terms: TermResource[];
-    }>(`accounts/${accountId}/terms`);
-
-    const termResources = result.body.enrollment_terms.map((termPlain) => {
-      const termCls = plainToClass(TermResource, termPlain, {
-        excludeExtraneousValues: true,
-      });
-      return termCls;
-    });
-    return termResources;
-    // return _.sortBy(termResources, (tr) => -tr.id);
+  @Trace()
+  getAssignmentGroups(courseId: number) {
+    return this.apiClient.paginate.all<APIAssignmentGroup>(
+      `courses/${courseId}/assignment_groups`
+    );
   }
+
+  @Trace()
+  getStudents(courseId: number) {
+    return this.apiClient.paginate.all<APIStudent>(
+      `courses/${courseId}/students`
+    );
+  }
+
+  apiGetGroupCategories = (courseId: number) =>
+    this.apiClient
+      .get<APIGroupCategory[]>(`courses/${courseId}/group_categories`)
+      .then((response) => response.body);
+
+  @Trace({ depth: 7 })
+  XapiGetGroups(courseId: number) {
+    return this.apiClient
+      .get<APIGroup[]>(`courses/${courseId}/groups`)
+      .then((response) => response.body)
+      .then((groups) =>
+        Promise.map(groups, (group) => this.apiGetGroupMembers(group.id))
+      )
+      .then((foo) => console.log(foo));
+  }
+
+  @Trace()
+  apiGetGroups(courseId: number) {
+    return this.apiClient
+      .get<APIGroup[]>(`courses/${courseId}/groups`)
+      .then((response) => response.body);
+  }
+
+  @Trace()
+  apiGetGroupMembers(groupId: number) {
+    return this.apiClient
+      .get<APIGroupMember[]>(`groups/${groupId}/users`)
+      .then((response) => response.body);
+  }
+
+  // @Trace()
+  async getGroupCategories(courseId: number) {
+    const apiGroupCategories = await this.apiGetGroupCategories(courseId);
+    const apiGroups = await this.apiGetGroups(courseId);
+
+    for (const apiGroupCategory of apiGroupCategories) {
+      apiGroupCategory.groups = apiGroups.filter(
+        (g) => g.group_category_id === apiGroupCategory.id
+      );
+    }
+
+    return apiGroupCategories;
+  }
+
+  @Trace({ depth: 3 })
+  async getGroups(courseId: number) {
+    const apiGroups = await this.apiGetGroups(courseId);
+    for (const apiGroup of apiGroups) {
+      apiGroup.members = await this.apiGetGroupMembers(apiGroup.id);
+    }
+    return apiGroups.map((g) =>
+      plainToClass(Group, g, { excludeExtraneousValues: true })
+    );
+  }
+
+  @Trace()
+  getGroupMembers(groupId: number) {
+    return this.apiGetGroupMembers(groupId).then((groupMembers) =>
+      groupMembers.map((groupMember) =>
+        plainToClass(GroupMember, groupMember, {
+          excludeExtraneousValues: true,
+        })
+      )
+    );
+  }
+
+  // ---------- TO DO BELOW THIS LINE ----------
 
   async getAssignments(): Promise<Assignment[]> {
     const courseId = this.cache.getCourse().id;
@@ -119,7 +231,7 @@ export default class CanvasApi {
     );
   }
 
-  async getGroupCategories(courseId: number): Promise<GroupCategory[]> {
+  async getGroupCategoriesOLD(courseId: number): Promise<GroupCategory[]> {
     const groupCategoryById = _(
       await this.apiClient
         .get(`courses/${courseId}/group_categories`)
@@ -166,10 +278,6 @@ export default class CanvasApi {
       .then((response) => response.body);
   }
 
-  async getStudents(courseId = this.cache.getCourse().id): Promise<Student[]> {
-    return this.apiClient.paginate.all(`courses/${courseId}/students`);
-  }
-
   getOneStudent(studentId: number): Promise<Student> {
     const courseId = this.cache.getCourse().id;
     return this.apiClient
@@ -182,10 +290,6 @@ export default class CanvasApi {
     return this.apiClient
       .get(`courses/${courseId}/assignments/${assignmentId}`)
       .then((response) => response.body);
-  }
-
-  getAssignmentGroups(courseId: number): Promise<AssignmentGroup[]> {
-    return this.apiClient.paginate.all(`courses/${courseId}/assignment_groups`);
   }
 
   getOneSubmission(userId: number): Promise<Submission> {
@@ -210,22 +314,6 @@ export default class CanvasApi {
     const searchParamInclude = { "include[]": "user" };
     return this.apiClient.paginate.all(segments.join("/"), {
       searchParams: searchParamInclude,
-      pagination: {
-        paginate: (response, allItems, currentItems) => {
-          const linkHeader = parseLinkHeader(response.headers.link as string);
-          let rtn = false;
-          if (linkHeader.hasOwnProperty("next")) {
-            rtn = {
-              searchParams: {
-                ...searchParamInclude,
-                page: +linkHeader.next.page,
-                per_page: 10,
-              },
-            };
-          }
-          return rtn;
-        },
-      },
     });
   }
 

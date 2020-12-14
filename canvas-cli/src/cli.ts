@@ -38,7 +38,7 @@ import {
 import { program } from "commander";
 import { version } from "../package.json";
 import TurndownService from "turndown";
-import TermResource from "./entities/Term";
+import Term from "./entities/Term";
 
 const cache = new CacheDb();
 const api = new CanvasApi(cache);
@@ -1038,8 +1038,8 @@ export default function cli() {
     .command("term")
     .description("Set the current term")
     .action(async () => {
-      const terms = await api.getEnrollmentTerms();
-      const answers = await inquirer.prompt<{ term: TermResource }>([
+      const terms = await api.getTerms();
+      const answers = await inquirer.prompt<{ term: Term }>([
         {
           type: "list",
           name: "term",
@@ -1065,8 +1065,8 @@ export default function cli() {
     .command("course")
     .description("Set current course")
     .action(async () => {
-      const courses = await api.getCourses();
-      const answer = await inquirer.prompt([
+      const courses = await api.getCourses(cache.getTerm().id);
+      const answers = await inquirer.prompt<{ course: CourseResource }>([
         {
           type: "list",
           name: "course",
@@ -1079,15 +1079,21 @@ export default function cli() {
             })),
         },
       ]);
-      const groups = await api.getAssignmentGroups(answer.course.id);
-      const students = await api.getStudents(answer.course.id);
-      const groupCategories = await api.getGroupCategories(answer.course.id);
 
+      // const assignmentGroups = await api.getAssignmentGroups(answers.course.id);
+
+      // const students = await api.getStudents(answers.course.id);
+
+      // const groupCategories = await api.getGroupCategories(answers.course.id);
+
+      const groups = await api.getGroups(answers.course.id);
+
+      return; ///////////////////////
       cache
         .set("course", {
-          id: answer.course.id,
-          name: answer.course.name,
-          course_code: answer.course.course_code,
+          id: answers.course.id,
+          name: answers.course.name,
+          course_code: answers.course.course_code,
           assignment_groups: _.keyBy(groups, (elt) => elt.id),
           students: _.keyBy(students, (elt) => elt.id),
           groupCategories,
