@@ -24,7 +24,7 @@ import wrapText from "wrap-text";
 import dir from "node-dir";
 import CacheDb from "./cacheDb";
 import { listGroups, listStudents } from "./commands/list";
-import CanvasApi from "./api";
+import CanvasApi from "./api/api";
 import stream from "stream";
 import { promisify } from "util";
 import { debugCache, debugCli, debugDownload, debugExtract } from "./debug";
@@ -39,6 +39,7 @@ import { program } from "commander";
 import { version } from "../package.json";
 import TurndownService from "turndown";
 import Term from "./entities/Term";
+import { Course } from "./entities/Course";
 
 const cache = new CacheDb();
 const api = new CanvasApi(cache);
@@ -1066,7 +1067,7 @@ export default function cli() {
     .description("Set current course")
     .action(async () => {
       const courses = await api.getCourses(cache.getTerm().id);
-      const answers = await inquirer.prompt<{ course: CourseResource }>([
+      const answers = await inquirer.prompt<{ course: Course }>([
         {
           type: "list",
           name: "course",
@@ -1079,7 +1080,10 @@ export default function cli() {
             })),
         },
       ]);
-      // FIXME - Cache course.
+
+      await api.getGroupCategories(answers.course.id);
+
+      // FIXME - Cache the course locally.
     });
 
   program.parse(process.argv);

@@ -1,13 +1,11 @@
 import low, { LowdbSync } from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
+import { debugCache } from "./debug";
 
-import Debug from "debug";
 import { Assignment, Cache } from "./entities/Assignment";
 import { Term } from "./entities/Term";
 import { Course } from "./entities/Course";
 import { Student } from "./entities/Student";
-import { Trace } from "./Trace";
-const debug = Debug("cli:cache");
 
 export default class CacheDb {
   private db: LowdbSync<Cache>;
@@ -24,7 +22,7 @@ export default class CacheDb {
   }
 
   get(path: any) {
-    debug("get %s", path);
+    debugCache("get %s", path);
     if (!this.db.has(path)) {
       throw `No cached value for '${path}'`;
     }
@@ -32,7 +30,7 @@ export default class CacheDb {
   }
 
   set(path: any, value: any) {
-    debug("set %s", path);
+    debugCache("set %s", path);
     return this.db.set(path, value);
   }
 

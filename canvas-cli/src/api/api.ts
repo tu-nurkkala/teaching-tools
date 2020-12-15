@@ -1,18 +1,13 @@
 // @ts-nocheck
 
-import got, { Got } from "got";
-import { program } from "commander";
-import chalk from "chalk";
+import { Got } from "got";
 import _ from "lodash";
-import ora from "ora";
-import { debugNet } from "./debug";
-import CacheDb from "./cacheDb";
+import CacheDb from "../cacheDb";
 import queryString from "qs";
-import parseLinkHeader from "parse-link-header";
-import { Term } from "./entities/Term";
+import { Term } from "../entities/Term";
 import { plainToClass } from "class-transformer";
-import { APIAssignmentGroup, APICourse, Course } from "./entities/Course";
-import { APIStudent, Student } from "./entities/Student";
+import { APIAssignmentGroup, APICourse, Course } from "../entities/Course";
+import { APIStudent, Student } from "../entities/Student";
 import {
   APIGroup,
   APIGroupCategory,
@@ -20,84 +15,19 @@ import {
   Group,
   GroupCategory,
   GroupMember,
-} from "./entities/Group";
+} from "../entities/Group";
 import { Promise } from "bluebird";
-import { Trace } from "./Trace";
 import {
   Assignment,
   Submission,
   SubmissionSummary,
-} from "./entities/Assignment";
-
-const apiSpinner = ora();
+} from "../entities/Assignment";
+import getClient from "./http";
 
 export default class CanvasApi {
-  apiClient: Got;
-  cache: CacheDb;
-
-  constructor(cache: CacheDb) {
-    this.cache = cache;
-
-    this.apiClient = got.extend({
-      prefixUrl: process.env["CANVAS_URL"] + "/api/v1",
-      headers: {
-        Authorization: `Bearer ${process.env["CANVAS_TOK"]}`,
-      },
-      responseType: "json",
-      pagination: {
-        paginate: (response, allItems, currentItems) => {
-          let rtn = false;
-          if (response.headers.link) {
-            const linkHeader = parseLinkHeader(response.headers.link as string);
-            if (linkHeader.hasOwnProperty("next")) {
-              if (program.apiChatter) {
-                console.log(`Page to ${linkHeader.next.url}`);
-              }
-              rtn = {
-                searchParams: {
-                  ...searchParamInclude,
-                  page: +linkHeader.next.page,
-                  per_page: 10,
-                },
-              };
-            }
-          }
-          return rtn;
-        },
-      },
-      hooks: {
-        beforeRequest: [
-          (options) => {
-            debugNet("Request options %O", options);
-            if (program.apiChatter) {
-              apiSpinner.start(
-                `Send ${chalk.blue(options.method)} request to ${chalk.blue(
-                  options.url.href
-                )}`
-              );
-            }
-          },
-        ],
-        afterResponse: [
-          (response) => {
-            debugNet("Response %O", response);
-            if (program.apiChatter) {
-              apiSpinner.succeed();
-            }
-            return response;
-          },
-        ],
-        beforeError: [
-          (error) => {
-            console.log("ERROR", error);
-            if (program.apiChatter) {
-              apiSpinner.fail();
-            }
-            return error;
-          },
-        ],
-      },
-    });
+  private apiClient: Got;
+  constructor(private cache: CacheDb) {
+    this.apiClient = getClient();
   }
 
   private submissionUrl(userId: number) {
@@ -151,12 +81,20 @@ export default class CanvasApi {
     );
   }
 
+  // @Trace()
   apiGetGroupCategories(courseId: number) {
     return this.apiClient
       .get<APIGroupCategory[]>(`courses/${courseId}/group_categories`)
       .then((response) => response.body);
   }
 
+  unwedgeGroupCats(courseId: number) {
+    return this.apiClient.get<APIGroupCategory[]>(
+      `courses/${courseId}/group_categories`
+    );
+  }
+
+  // @Trace()
   apiGetGroups(courseId: number) {
     return this.apiClient
       .get<APIGroup[]>(`courses/${courseId}/groups`)
@@ -166,7 +104,10 @@ export default class CanvasApi {
   apiGetGroupMembers(groupId: number) {
     return this.apiClient
       .get<APIGroupMember[]>(`groups/${groupId}/users`)
-      .then((response) => response.body);
+      .then((response) => {
+        console.log("FETCHED", groupId);
+        return response.body;
+      });
   }
 
   async apiGetGroupsWithMembers(courseId: number) {
