@@ -2,7 +2,7 @@ import low, { LowdbSync } from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
 import { debugCache } from "./debug";
 
-import { Assignment, Cache } from "./entities/Assignment";
+import {Assignment, Cache, Submission} from "./entities/Assignment";
 import { Term } from "./entities/Term";
 import { Course } from "./entities/Course";
 import { Student } from "./entities/Student";
@@ -52,5 +52,16 @@ export default class CacheDb {
 
   getStudent(studentId: number): Student {
     return this.get(`course.students.${studentId}`).value();
+  }
+
+  cacheSubmission(submission: Submission) {
+    this.set(`course.students.${submission.user.id}.submission`, {
+      id: submission.id,
+      grade: submission.grade,
+      score: submission.score,
+      grader_id: submission.grader_id,
+      graded_at: submission.graded_at,
+      workflow_state: submission.workflow_state,
+    }).write();
   }
 }

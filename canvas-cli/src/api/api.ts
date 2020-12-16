@@ -2,7 +2,7 @@
 
 import { Got } from "got";
 import _ from "lodash";
-import CacheDb from "../cacheDb";
+import CacheDb from "../CacheDb";
 import queryString from "qs";
 import { Term } from "../entities/Term";
 import { plainToClass } from "class-transformer";

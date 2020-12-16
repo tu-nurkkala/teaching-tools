@@ -62,5 +62,6 @@ export interface Assignment extends AbstractResource {
   submission_types: SubmissionType[];
   points_possible: number;
   submission_summary: SubmissionSummary;
+  assignment_group_id: number;
   comments: string[];
 }

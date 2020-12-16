@@ -6,9 +6,8 @@ import chalk from "chalk";
 import ora from "ora";
 
 const apiSpinner = ora();
-program.apiChatter = true;
 
-export default function getClient() {
+export default function getClient(chatter = false) {
   return got.extend({
     prefixUrl: process.env["CANVAS_URL"] + "/api/v1",
     headers: {
@@ -22,7 +21,7 @@ export default function getClient() {
         if (response.headers.link) {
           const linkHeader = parseLinkHeader(response.headers.link as string);
           if (linkHeader && linkHeader.hasOwnProperty("next")) {
-            if (program.apiChatter) {
+            if (chatter) {
               console.log(`Page to ${linkHeader.next.url}`);
             }
             rtn = {
@@ -41,7 +40,7 @@ export default function getClient() {
       beforeRequest: [
         (options) => {
           debugNet("Request options %O", options);
-          if (program.apiChatter) {
+          if (chatter) {
             apiSpinner.start(
               `Send ${chalk.blue(options.method)} request to ${chalk.blue(
                 options.url.href
@@ -53,7 +52,7 @@ export default function getClient() {
       afterResponse: [
         (response) => {
           debugNet("Response %O", response);
-          if (program.apiChatter) {
+          if (chatter) {
             apiSpinner.succeed();
           }
           return response;
@@ -62,7 +61,7 @@ export default function getClient() {
       beforeError: [
         (error) => {
           console.log("ERROR", error);
-          if (program.apiChatter) {
+          if (chatter) {
             apiSpinner.fail();
           }
           return error;
