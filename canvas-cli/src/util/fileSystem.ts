@@ -6,7 +6,7 @@ import { Student } from "../entities/Student";
 import CacheDb from "../CacheDb";
 const cache = new CacheDb();
 
-function sanitizeString(str: string) {
+function sanitizePathSegment(str: string) {
   return str
     .replace(/[^-_.a-z0-9\s]/gi, "")
     .replace(/[\s_-]+/g, "-")
@@ -20,19 +20,19 @@ export function submissionBaseDir() {
 export function submissionCourseDir() {
   return join(
     submissionBaseDir(),
-    sanitizeString(cache.get("course.course_code").value())
+    sanitizePathSegment(cache.get("course.course_code").value())
   );
 }
 
 export function submissionAssignmentDir() {
   return join(
     submissionCourseDir(),
-    sanitizeString(cache.get("assignment.name").value())
+    sanitizePathSegment(cache.get("assignment.name").value())
   );
 }
 
 export function submissionStudentDir(student: Student) {
-  return join(submissionAssignmentDir(), sanitizeString(student.sortable_name));
+  return join(submissionAssignmentDir(), sanitizePathSegment(student.sortable_name));
 }
 
 export function submissionDir(student: Student) {

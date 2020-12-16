@@ -1,11 +1,4 @@
-export interface Dictionary<T> {
-  [key: string]: T;
-}
-
-export interface AbstractResource {
-  id: number;
-  name: string;
-}
+import { APIStudent, Student } from "./Student";
 
 export interface Cache {
   canvas: Canvas;
@@ -29,6 +22,7 @@ export interface Submission {
   grader_id: number;
   graded_at: string;
   attachments: Attachment[];
+  user: Student;
 }
 
 export interface Attachment {
@@ -36,6 +30,8 @@ export interface Attachment {
   display_name: string;
   content_type: string;
   size: number;
+  "content-type": string;
+  url: string;
 }
 
 export interface FileInfo {
@@ -55,7 +51,9 @@ export type SubmissionType =
   | "online_text_entry"
   | "online_url";
 
-export interface Assignment extends AbstractResource {
+export interface Assignment {
+  id: number;
+  name: string;
   due_at: string;
   html_url: string;
   needs_grading_count: number;

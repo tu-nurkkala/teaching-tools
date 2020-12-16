@@ -14,6 +14,7 @@
 // }
 
 import { Expose } from "class-transformer";
+import { FileInfo, Submission } from "./Assignment";
 
 export class Student {
   @Expose() id: number = 0;
@@ -21,6 +22,8 @@ export class Student {
   @Expose() created_at: string = "";
   @Expose() sortable_name: string = "";
   @Expose() short_name: string = "";
+  files: FileInfo[] = [];
+  submission!: Submission;
 }
 
 export interface APIStudent {

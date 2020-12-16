@@ -1,4 +1,3 @@
-import { Command, program } from "commander";
 import CanvasApi from "../api/api";
 import CacheDb from "../CacheDb";
 import { formatSubmissionType, warning } from "../util/formatting";
@@ -17,40 +16,50 @@ import tar from "tar";
 import { ExtractHelper } from "../util/ExtractHelper";
 import { Attachment, Submission } from "../entities/Assignment";
 
+interface DownloadCommandOptions {
+  showDetails: boolean;
+  maxSize: number;
+}
+
+function parseIntOption(value: string, previous?: number) {
+  return parseInt(value);
+}
+
 export class DownloadCommands {
   private turndownService = new TurndownService({
     headingStyle: "atx",
   });
   private pipeline = promisify(stream.pipeline);
 
-  constructor(
-    private downloadCmd: Command,
-    private api: CanvasApi,
-    private cache: CacheDb
-  ) {
-    downloadCmd
+  constructor(private api: CanvasApi, private cache: CacheDb) {}
+  addCommands(topLevelCommand: any) {
+    topLevelCommand
       .command("download [studentId]")
       .description("Download submissions")
       .option(
         "--max-size <size>",
-        "Don't get attachments larger than this (bytes)"
+        "Don't get attachments larger than this (bytes)",
+        parseIntOption
       )
       .option("--show-details", "Show submission details")
-      .action(async (studentId, options) => {
+      .action(async (studentId: number, options: DownloadCommandOptions) => {
         if (studentId) {
           await this.processOneSubmission(
-            await api.getOneSubmission(studentId),
+            await this.api.getOneSubmission(studentId),
             options
           );
         } else {
-          for (const submission of await api.getSubmissions()) {
+          for (const submission of await this.api.getSubmissions()) {
             await this.processOneSubmission(submission, options);
           }
         }
       });
   }
 
-  async processOneSubmission(submission, options) {
+  async processOneSubmission(
+    submission: Submission,
+    options: DownloadCommandOptions
+  ) {
     console.log(
       submission.id,
       submission.user.name,
@@ -105,7 +114,7 @@ export class DownloadCommands {
             attachment["content-type"]
           );
           if (options.maxSize) {
-            const sizeLimit = parseInt(options.maxSize);
+            const sizeLimit = options.maxSize;
             if (attachment.size > sizeLimit) {
               console.log(
                 "\t",
@@ -226,7 +235,7 @@ export class DownloadCommands {
             onentry: (entry) => {
               debugExtract("Tar entry %O", entry);
               if (entry.type !== "Directory") {
-                extractHelper.addEntry(entry.path, entry.size);
+                extractHelper.addEntry(entry.path, entry.size || 0);
               }
             },
           });

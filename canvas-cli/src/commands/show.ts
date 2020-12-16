@@ -1,4 +1,4 @@
-import { Command, program } from "commander";
+import { Command } from "commander";
 import chalk from "chalk";
 import _ from "lodash";
 import { table } from "table";
@@ -6,46 +6,47 @@ import dir from "node-dir";
 import CanvasApi from "../api/api";
 import CacheDb from "../CacheDb";
 import {
-    submissionAssignmentDir,
-    submissionBaseDir,
-    submissionCourseDir, submissionStudentDir
+  submissionAssignmentDir,
+  submissionBaseDir,
+  submissionCourseDir,
+  submissionStudentDir,
 } from "../util/fileSystem";
-import {longestValueLength} from "../util/formatting";
+import { longestValueLength } from "../util/formatting";
 
 export class ShowCommands {
-  constructor(
-    private showCmd: Command,
-    private api: CanvasApi,
-    private cache: CacheDb
-  ) {
+  constructor(private api: CanvasApi, private cache: CacheDb) {}
+
+  addCommands(program: Command) {
+    const showCmd = program.command("show").description("Show things");
+
     showCmd
       .command("submission <userId>")
       .description("Show details of submission from user <userId>")
-      .action(async (userId) => {
-        const submission = await api.getOneSubmission(userId);
+      .action(async (userId: number) => {
+        const submission = await this.api.getOneSubmission(userId);
         console.log(submission);
       });
 
     showCmd
       .command("assignment <id>")
       .description("Show details of assignment <id>")
-      .action(async (id) => {
-        const assignment = await api.getOneAssignment(id);
+      .action(async (id: number) => {
+        const assignment = await this.api.getOneAssignment(id);
         console.log(assignment);
       });
 
     showCmd
       .command("student <id>")
       .description("Show details of student <id>")
-      .action(async (id) => {
-        const student = await api.getOneStudent(id);
+      .action(async (id: number) => {
+        const student = await this.api.getOneStudent(id);
         console.log(student);
       });
 
     showCmd
       .command("paths [studentId]")
       .description("Show paths to downloaded files")
-      .action((studentId) => {
+      .action((studentId: number) => {
         const entries = [
           { name: "Base", path: submissionBaseDir() },
           { name: "Course", path: submissionCourseDir() },
@@ -53,7 +54,7 @@ export class ShowCommands {
         ];
 
         if (studentId) {
-          const student = cache.getStudent(studentId);
+          const student = this.cache.getStudent(studentId);
           entries.push({
             name: "Student",
             path: submissionStudentDir(student),
@@ -73,12 +74,13 @@ export class ShowCommands {
     showCmd
       .command("tree <studentId>")
       .description("Show tree view of downloaded files")
-      .action((studentId) => {
-        const baseDir = submissionStudentDir(cache.getStudent(studentId));
+      .action((studentId: number) => {
+        const baseDir = submissionStudentDir(this.cache.getStudent(studentId));
         dir.files(baseDir, (err, files) => {
           if (err) throw err;
           files.forEach((f) => console.log(f));
         });
       });
+    return showCmd;
   }
 }

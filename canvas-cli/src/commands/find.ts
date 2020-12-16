@@ -6,17 +6,17 @@ import CanvasApi from "../api/api";
 import CacheDb from "../CacheDb";
 
 export class FindCommands {
-  constructor(
-    private findCmd: Command,
-    private api: CanvasApi,
-    private cache: CacheDb
-  ) {
+  constructor(private api: CanvasApi, private cache: CacheDb) {}
+
+  addCommands(program: Command) {
+    const findCmd = program.command("find").description("Find things");
+
     findCmd
       .command("student <fuzzy>")
       .alias("search")
       .description("Find student using fuzzy match")
       .action(async (fuzzy) => {
-        const students = await api.getStudents(cache.getCourse().id);
+        const students = await this.api.getStudents(this.cache.getCourse().id);
         const fuse = new Fuse(students, {
           includeScore: true,
           ignoreLocation: true,
@@ -31,5 +31,6 @@ export class FindCommands {
         ]);
         console.log(table(rows, { singleLine: true }));
       });
+    return findCmd;
   }
 }

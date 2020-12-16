@@ -8,30 +8,32 @@ import { formatSubmissionTypes } from "../util/formatting";
 import { Command } from "commander";
 
 export class ListCommands {
-  constructor(
-    private listCmd: Command,
-    private api: CanvasApi,
-    private cache: CacheDb
-  ) {
+  constructor(private api: CanvasApi, private cache: CacheDb) {}
+
+  addCommands(program: Command) {
+    const listCmd = program.command("list").description("List things");
+
     listCmd
       .command("assignments")
       .description("List assignments")
-      .action((api, cache) => this.listAssignments(api, cache));
+      .action((api, cache) => this.listAssignments());
 
     listCmd
       .command("students")
       .description("List students")
-      .action(() => this.listStudents(cache));
+      .action(() => this.listStudents());
 
     listCmd
       .command("groups")
       .description("List all groups/members")
-      .action(() => this.listGroups(cache));
+      .action(() => this.listGroups());
+
+    return listCmd;
   }
 
-  async listAssignments(api: CanvasApi, cache: CacheDb) {
-    const groups = cache.get("course.assignment_groups").value();
-    const assignments = await api.getAssignments();
+  async listAssignments() {
+    const groups = this.cache.get("course.assignment_groups").value();
+    const assignments = await this.api.getAssignments();
     const rows = assignments.map((a) => [
       a.id,
       a.needs_grading_count
@@ -46,16 +48,16 @@ export class ListCommands {
     console.log(table(rows, { singleLine: true }));
   }
 
-  listStudents(db: CacheDb) {
-    const students = sortBy(db.getStudents(), (s) =>
+  listStudents() {
+    const students = sortBy(this.cache.getStudents(), (s) =>
       s.sortable_name.toLowerCase()
     );
     const rows = students.map((s) => [s.id, s.name]);
     console.log(table(rows, { singleLine: true }));
   }
 
-  listGroups(db: CacheDb) {
-    const groupCategories = db.get("course.groupCategories").value();
+  listGroups() {
+    const groupCategories = this.cache.get("course.groupCategories").value();
     const rows = [];
 
     for (let grpCat of values(groupCategories)) {

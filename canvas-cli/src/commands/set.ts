@@ -9,16 +9,19 @@ import { Term } from "../entities/Term";
 import { Course } from "../entities/Course";
 
 export class SetCommands {
-  constructor(
-    private setCmd: Command,
-    private api: CanvasApi,
-    private cache: CacheDb
-  ) {
+  constructor(private api: CanvasApi, private cache: CacheDb) {}
+
+  addCommands(program: Command) {
+    const setCmd = program
+      .command("set")
+      .aliases(["choose", "select"])
+      .description("Set state");
+
     setCmd
       .command("assignment [id]")
       .description("Set the current assignment")
       .action(async (id) => {
-        const allAssignments = await api.getAssignments();
+        const allAssignments = await this.api.getAssignments();
         let selectedAssignment = null;
         if (id) {
           selectedAssignment = allAssignments.find((a) => a.id === +id);
@@ -43,34 +46,38 @@ export class SetCommands {
             .then((answer) => (selectedAssignment = answer.assignment));
         }
 
-        const submissionSummary = await api.getSubmissionSummary(
-          selectedAssignment.id
-        );
+        if (selectedAssignment) {
+          const submissionSummary = await this.api.getSubmissionSummary(
+            selectedAssignment.id
+          );
 
-        const dbData = _(selectedAssignment)
-          .pick([
-            "id",
-            "name",
-            "due_at",
-            "html_url",
-            "needs_grading_count",
-            "submission_types",
-            "points_possible",
-          ])
-          .set("submission_summary", submissionSummary)
-          .set("comments", []);
+          const dbData = _(selectedAssignment)
+            .pick([
+              "id",
+              "name",
+              "due_at",
+              "html_url",
+              "needs_grading_count",
+              "submission_types",
+              "points_possible",
+            ])
+            .set("submission_summary", submissionSummary)
+            .set("comments", []);
 
-        cache.set("assignment", dbData).write();
-        console.log(
-          chalk.green(`Current assignment now '${selectedAssignment.name}'`)
-        );
+          this.cache.set("assignment", dbData).write();
+          console.log(
+            chalk.green(`Current assignment now '${selectedAssignment.name}'`)
+          );
+        } else {
+          fatal("Failed to find selected assignment.");
+        }
       });
 
     setCmd
       .command("term")
       .description("Set the current term")
       .action(async () => {
-        const terms = await api.getTerms();
+        const terms = await this.api.getTerms();
         const answers = await inquirer.prompt<{ term: Term }>([
           {
             type: "list",
@@ -84,7 +91,7 @@ export class SetCommands {
               })),
           },
         ]);
-        cache
+        this.cache
           .set("term", {
             id: answers.term.id,
             name: answers.term.name,
@@ -97,7 +104,7 @@ export class SetCommands {
       .command("course")
       .description("Set current course")
       .action(async () => {
-        const courses = await api.getCourses(cache.getTerm().id);
+        const courses = await this.api.getCourses(this.cache.getTerm().id);
         const answers = await inquirer.prompt<{ course: Course }>([
           {
             type: "list",
@@ -112,9 +119,10 @@ export class SetCommands {
           },
         ]);
 
-        await api.getGroupCategories(answers.course.id);
+        await this.api.getGroupCategories(answers.course.id);
 
         // FIXME - Cache the course locally.
       });
+    return setCmd;
   }
 }

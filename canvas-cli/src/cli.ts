@@ -7,7 +7,6 @@ import CacheDb from "./CacheDb";
 import { ListCommands } from "./commands/list";
 import CanvasApi from "./api/api";
 import { Assignment } from "./entities/Assignment";
-import { program } from "commander";
 import { version } from "../package.json";
 import { Term } from "./entities/Term";
 import { Course } from "./entities/Course";
@@ -17,9 +16,13 @@ import { GradeCommands } from "./commands/grade";
 import { DownloadCommands } from "./commands/download";
 import { SetCommands } from "./commands/set";
 
+// Something seems goofed up with importing from the typings file.
+const { Command } = require("commander");
+
 const cache = new CacheDb();
 const api = new CanvasApi(cache);
 
+const program = new Command();
 program.version(version);
 program.option("--api-chatter", "Show API actions");
 
@@ -40,6 +43,8 @@ function showElement(typeName: string, value: number) {
 }
 
 function showCurrentState() {
+  console.log("FIX ME");
+  return;
   const assignment = cache.getAssignment();
   showElement("Term", cache.getTerm().id);
   showElement("Course", cache.getCourse().id);
@@ -55,40 +60,12 @@ export default function cli() {
     .alias("status")
     .description("Show current settings");
 
-  const foo = program.command("foo").description("List things");
-  foo.command("zowie").action(() => console.log("foo"));
-
-  new ListCommands(
-    //program.command("list").description("List things"),
-    foo,
-    api,
-    cache
-  );
-
-  new ShowCommands(
-    program.command("show").description("Show details"),
-    api,
-    cache
-  );
-
-  new FindCommands(
-    program.command("find").description("Find things"),
-    api,
-    cache
-  );
-
-  new GradeCommands(program, api, cache);
-  new DownloadCommands(program, api, cache);
-
-  new SetCommands(
-    program
-      .command("select")
-      .alias("choose")
-      .alias("set")
-      .description("Set current values"),
-    api,
-    cache
-  );
+  new ListCommands(api, cache).addCommands(program);
+  new ShowCommands(api, cache).addCommands(program);
+  new FindCommands(api, cache).addCommands(program);
+  new GradeCommands(api, cache).addCommands(program);
+  new DownloadCommands(api, cache).addCommands(program);
+  new SetCommands(api, cache).addCommands(program);
 
   program.parse(process.argv);
 }

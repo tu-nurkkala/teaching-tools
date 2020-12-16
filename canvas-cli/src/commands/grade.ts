@@ -1,4 +1,4 @@
-import { Command, program } from "commander";
+import { Command } from "commander";
 import chalk from "chalk";
 import { table } from "table";
 import _ from "lodash";
@@ -17,13 +17,19 @@ import prettyBytes from "pretty-bytes";
 import { Student } from "../entities/Student";
 import { submissionDir, submissionPath } from "../util/fileSystem";
 
+type GradingSchemes = "points" | "passfail" | "letter";
+
+interface GradeCommandOptions {
+  editor: boolean;
+  pager: boolean;
+  scheme: GradingSchemes;
+}
+
 export class GradeCommands {
-  constructor(
-    private gradeCmd: Command,
-    private api: CanvasApi,
-    private cache: CacheDb
-  ) {
-    gradeCmd
+  constructor(private api: CanvasApi, private cache: CacheDb) {}
+
+  addCommands(topLevelCommand: Command) {
+    topLevelCommand
       .command("grade [userId] [score]")
       .description("Grade submission", {
         userId: "user ID of student; if missing, select from list",
@@ -36,135 +42,143 @@ export class GradeCommands {
         chalk`Grading scheme: {blue points}, {blue passfail}, {blue letter}`,
         "points"
       )
-      .action(async (userId, score, options) => {
-        const maxScore = this.currentMaxScore();
+      .action((userId: number, score: number, options: GradeCommandOptions) =>
+        this.gradeSubmission(userId, score, options)
+      );
+  }
 
-        if (options.pager) {
-          if (options.editor) {
-            fatal("Can't enable both editor and pager");
-          }
+  private showViewer(options: GradeCommandOptions, student: Student) {
+    if (options.editor) {
+      return this.showEditor(student);
+    } else if (options.pager) {
+      return this.showPager(student);
+    }
+  }
+
+  async gradeSubmission(
+    userId: number,
+    score: number,
+    options: GradeCommandOptions
+  ) {
+    const maxScore = this.currentMaxScore();
+
+    if (options.pager) {
+      if (options.editor) {
+        fatal("Can't enable both editor and pager");
+      }
+    } else {
+      if (!options.editor) {
+        options.pager = true;
+      }
+    }
+
+    let gradingFunction;
+    switch (options.scheme) {
+      case "points":
+        gradingFunction = this.gradePoints;
+        break;
+      case "passfail":
+        gradingFunction = this.gradePassFail;
+        break;
+      case "letter":
+        gradingFunction = this.gradeLetter;
+        break;
+      default:
+        fatal(`Invalid grading scheme '${options.scheme}'`);
+    }
+
+    if (userId) {
+      // Grade one student.
+      if (!score) {
+        fatal("Specific `userId` also requires `score`.");
+      }
+
+      const student = this.cache.getStudent(userId);
+      if (!student) {
+        fatal(`No cached student with id ${userId}`);
+      }
+
+      this.showViewer(options, student);
+      await this.confirmScore(student, score, maxScore);
+    } else {
+      // Grade multiple students.
+      const allStudents: Student[] = [];
+      for (const [id, student] of Object.entries(
+        this.cache.get("course.students").value()
+      )) {
+        allStudents.push(student);
+      }
+      const gradedStudents: Student[] = [];
+      let remainingStudents: Student[] = [];
+      const rows = [[chalk.red("UNGRADED"), chalk.green("GRADED")]];
+
+      for (const student of allStudents) {
+        if (student.submission.workflow_state === "graded") {
+          gradedStudents.push(student);
+          rows.push(["", chalk.green(student.name)]);
         } else {
-          if (!options.editor) {
-            options.pager = true;
-          }
+          remainingStudents.push(student);
+          rows.push([chalk.red(student.name), ""]);
         }
+      }
 
-        let gradingFunction;
-        switch (options.scheme) {
-          case "points":
-            gradingFunction = this.gradePoints;
-            break;
-          case "passfail":
-            gradingFunction = this.gradePassFail;
-            break;
-          case "letter":
-            gradingFunction = this.gradeLetter;
-            break;
-          default:
-            fatal(`Invalid grading scheme '${options.scheme}'`);
+      console.log(
+        table(rows, {
+          drawHorizontalLine: (idx, size) =>
+            idx === 0 || idx === 1 || idx === size,
+        })
+      );
+
+      function formatStudentName(student: Student) {
+        let fileDetails = chalk.red("No files");
+        if (student.files && student.files.length > 0) {
+          fileDetails = chalk.green(`${student.files.length} files`);
         }
+        return [
+          student.name,
+          `(${student.id})`,
+          chalk.yellow(student.submission.workflow_state),
+          fileDetails,
+        ].join(" ");
+      }
 
-        function showViewer(student: Student) {
-          if (options.editor) {
-            return this.showEditor(student);
-          } else if (options.pager) {
-            return this.showPager(student);
-          }
-        }
+      while (_.size(remainingStudents) > 0) {
+        showSeparator();
+        const answer = await inquirer.prompt([
+          {
+            type: "list",
+            name: "student",
+            message: `Choose a student (${_.size(
+              remainingStudents
+            )} available)`,
+            pageSize: 20,
+            choices: () =>
+              remainingStudents.map((s) => ({
+                name: formatStudentName(s),
+                value: s,
+              })),
+          },
+        ]);
+        const student = answer.student;
 
-        if (userId) {
-          // Grade one student.
-          if (!score) {
-            fatal("Specific `userId` also requires `score`.");
-          }
+        await this.showViewer(student);
 
-          const student = this.cache.getStudent(userId);
-          if (!student) {
-            fatal(`No cached student with id ${userId}`);
-          }
-
-          showViewer(student);
-          await this.confirmScore(student, score, maxScore);
-        } else {
-          // Grade multiple students.
-          const allStudents: Student[] = [];
-          for (const [id, student] of Object.entries(
-            this.cache.get("course.students").value()
-          )) {
-            allStudents.push(student);
-          }
-          const gradedStudents: Student[] = [];
-          let remainingStudents: Student[] = [];
-          const rows = [[chalk.red("UNGRADED"), chalk.green("GRADED")]];
-
-          for (const student of allStudents) {
-            if (student.submission.workflow_state === "graded") {
-              gradedStudents.push(student);
-              rows.push(["", chalk.green(student.name)]);
-            } else {
-              remainingStudents.push(student);
-              rows.push([chalk.red(student.name), ""]);
-            }
-          }
-
-          console.log(
-            table(rows, {
-              drawHorizontalLine: (idx, size) =>
-                idx === 0 || idx === 1 || idx === size,
-            })
+        const score = await gradingFunction(maxScore);
+        const confirmed = await this.confirmScore(student, score, maxScore);
+        if (confirmed) {
+          const gradedStudent = remainingStudents.find(
+            (s) => s.id === student.id
           );
+          remainingStudents = remainingStudents.filter(
+            (s) => s.id !== student.id
+          );
+          gradedStudents.push(gradedStudent);
 
-          function formatStudentName(student) {
-            let fileDetails = chalk.red("No files");
-            if (student.files && student.files.length > 0) {
-              fileDetails = chalk.green(`${student.files.length} files`);
-            }
-            return [
-              student.name,
-              `(${student.id})`,
-              chalk.yellow(student.submission.workflow_state),
-              fileDetails,
-            ].join(" ");
-          }
-
-          while (_.size(remainingStudents) > 0) {
-            showSeparator();
-            const answer = await inquirer.prompt([
-              {
-                type: "list",
-                name: "student",
-                message: `Choose a student (${_.size(
-                  remainingStudents
-                )} available)`,
-                pageSize: 20,
-                choices: () =>
-                  remainingStudents.map((s) => ({
-                    name: formatStudentName(s),
-                    value: s,
-                  })),
-              },
-            ]);
-            const student = answer.student;
-
-            await showViewer(student);
-
-            const score = await gradingFunction(maxScore);
-            const confirmed = await this.confirmScore(student, score, maxScore);
-            if (confirmed) {
-              const gradedStudent = remainingStudents.find(
-                (s) => s.id === student.id
-              );
-              remainingStudents = remainingStudents.filter(
-                (s) => s.id !== student.id
-              );
-              gradedStudents.push(gradedStudent);
-
-              const updatedSubmission = await api.getOneSubmission(student.id);
-              this.cache.cacheSubmission(updatedSubmission);
-            }
-          }
+          const updatedSubmission = await this.api.getOneSubmission(student.id);
+          this.cache.cacheSubmission(updatedSubmission);
         }
-      });
+      }
+    }
   }
 
   gradePoints(maxScore: number): Promise<number> {
@@ -333,7 +347,7 @@ export class GradeCommands {
 
     if (confirmed) {
       const commentString = currentComments.join("\n");
-      await this.gradeSubmission(student.id, score, commentString);
+      await this.submitGrade(student.id, score, commentString);
       console.log("  Score", chalk.green(formattedScore));
       if (commentString) {
         console.log("Comment", chalk.green(commentString));
@@ -356,7 +370,7 @@ export class GradeCommands {
     return `Invalid score [0 <= ${score} <= ${maxScore}]`;
   }
 
-  gradeSubmission(userId: number, score: number, comment: string) {
+  submitGrade(userId: number, score: number, comment: string) {
     const maxScore = this.currentMaxScore();
     if (!this.isScoreValid(score, maxScore)) {
       fatal(this.invalidScoreMessage(score, maxScore));

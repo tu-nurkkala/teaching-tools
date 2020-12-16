@@ -5,10 +5,13 @@
 //   group_categories: Dictionary<GroupCategory>;
 // }
 
-import {Expose, Type} from "class-transformer";
-import { Dictionary } from "./Assignment";
+import { Expose, Type } from "class-transformer";
 import { Student } from "./Student";
 import { GroupCategory } from "./Group";
+
+export interface Dictionary<T> {
+  [key: string]: T;
+}
 
 export class AssignmentGroup {
   @Expose() id: number = 0;
