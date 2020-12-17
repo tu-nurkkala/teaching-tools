@@ -3,8 +3,8 @@ import { join } from "path";
 import { mkdirSync } from "fs";
 import { Student } from "../entities/Student";
 
-import CacheDb from "../CacheDb";
-const cache = new CacheDb();
+import Cache from "../Cache";
+const cache = Cache.getInstance();
 
 function sanitizePathSegment(str: string) {
   return str

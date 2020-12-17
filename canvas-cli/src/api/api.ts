@@ -1,8 +1,6 @@
-// @ts-nocheck
-
 import { Got } from "got";
 import _ from "lodash";
-import CacheDb from "../CacheDb";
+import Cache from "../Cache";
 import queryString from "qs";
 import { Term } from "../entities/Term";
 import { plainToClass } from "class-transformer";
@@ -26,7 +24,7 @@ import getClient from "./http";
 
 export default class CanvasApi {
   private apiClient: Got;
-  constructor(private cache: CacheDb) {
+  constructor(private cache: Cache) {
     this.apiClient = getClient();
   }
 
@@ -95,19 +93,18 @@ export default class CanvasApi {
   }
 
   // @Trace()
-  apiGetGroups(courseId: number) {
-    return this.apiClient
-      .get<APIGroup[]>(`courses/${courseId}/groups`)
-      .then((response) => response.body);
+  async apiGetGroups(courseId: number) {
+    const response = await this.apiClient.get<APIGroup[]>(
+      `courses/${courseId}/groups`
+    );
+    return response.body;
   }
 
-  apiGetGroupMembers(groupId: number) {
-    return this.apiClient
-      .get<APIGroupMember[]>(`groups/${groupId}/users`)
-      .then((response) => {
-        console.log("FETCHED", groupId);
-        return response.body;
-      });
+  async apiGetGroupMembers(groupId: number) {
+    const response = await this.apiClient.get<APIGroupMember[]>(
+      `groups/${groupId}/users`
+    );
+    return response.body;
   }
 
   async apiGetGroupsWithMembers(courseId: number) {
@@ -134,7 +131,8 @@ export default class CanvasApi {
   }
 
   async getGroups(courseId: number) {
-    return this.apiGetGroupsWithMembers.map((grp) =>
+    const groupsWithMembers = await this.apiGetGroupsWithMembers(courseId);
+    groupsWithMembers.map((grp) =>
       plainToClass(Group, grp, { excludeExtraneousValues: true })
     );
   }
@@ -149,8 +147,6 @@ export default class CanvasApi {
     );
   }
 
-  // ---------- TO DO BELOW THIS LINE ----------
-
   async getAssignments(): Promise<Assignment[]> {
     const courseId = this.cache.getCourse().id;
     return _.sortBy(
@@ -159,30 +155,32 @@ export default class CanvasApi {
     );
   }
 
-  getSubmissionSummary(assignmentId: number): Promise<SubmissionSummary> {
+  getSubmissionSummary(assignmentId: number) {
     const courseId = this.cache.getCourse().id;
     return this.apiClient
-      .get(`courses/${courseId}/assignments/${assignmentId}/submission_summary`)
+      .get<SubmissionSummary>(
+        `courses/${courseId}/assignments/${assignmentId}/submission_summary`
+      )
       .then((response) => response.body);
   }
 
-  getOneStudent(studentId: number): Promise<Student> {
+  getOneStudent(studentId: number) {
     const courseId = this.cache.getCourse().id;
     return this.apiClient
-      .get(`courses/${courseId}/users/${studentId}`)
+      .get<Student>(`courses/${courseId}/users/${studentId}`)
       .then((response) => response.body);
   }
 
-  getOneAssignment(assignmentId: number): Promise<Assignment> {
+  getOneAssignment(assignmentId: number) {
     const courseId = this.cache.getCourse().id;
     return this.apiClient
-      .get(`courses/${courseId}/assignments/${assignmentId}`)
+      .get<Assignment>(`courses/${courseId}/assignments/${assignmentId}`)
       .then((response) => response.body);
   }
 
-  getOneSubmission(userId: number): Promise<Submission> {
+  getOneSubmission(userId: number) {
     return this.apiClient
-      .get(this.submissionUrl(userId), {
+      .get<Submission>(this.submissionUrl(userId), {
         searchParams: queryString.stringify(
           { include: ["user", "course"] },
           { arrayFormat: "brackets" }
@@ -214,8 +212,8 @@ export default class CanvasApi {
       parameters.comment = { text_comment: comment };
     }
 
-    return api
-      .put(submissionUrl(userId), {
+    return this.apiClient
+      .put(this.submissionUrl(userId), {
         searchParams: queryString.stringify(parameters),
       })
       .then((response) => response.body);

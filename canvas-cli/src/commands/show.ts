@@ -4,7 +4,7 @@ import _ from "lodash";
 import { table } from "table";
 import dir from "node-dir";
 import CanvasApi from "../api/api";
-import CacheDb from "../CacheDb";
+import Cache from "../Cache";
 import {
   submissionAssignmentDir,
   submissionBaseDir,
@@ -14,7 +14,8 @@ import {
 import { longestValueLength } from "../util/formatting";
 
 export class ShowCommands {
-  constructor(private api: CanvasApi, private cache: CacheDb) {}
+  constructor(private api: CanvasApi) {}
+  private cache = Cache.getInstance();
 
   addCommands(program: Command) {
     const showCmd = program.command("show").description("Show things");

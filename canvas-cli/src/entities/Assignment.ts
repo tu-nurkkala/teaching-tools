@@ -1,15 +1,6 @@
 import { APIStudent, Student } from "./Student";
-
-export interface Cache {
-  canvas: Canvas;
-  // term: Term;
-  // course: Course;
-  assignment: Assignment;
-}
-
-export interface Canvas {
-  account_id: number;
-}
+import { Term } from "./Term";
+import { Course } from "./Course";
 
 export interface Submission {
   id: number;

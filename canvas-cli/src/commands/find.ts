@@ -3,10 +3,11 @@ import { Student } from "../entities/Student";
 import { table } from "table";
 import { Command } from "commander";
 import CanvasApi from "../api/api";
-import CacheDb from "../CacheDb";
+import Cache from "../Cache";
 
 export class FindCommands {
-  constructor(private api: CanvasApi, private cache: CacheDb) {}
+  constructor(private api: CanvasApi) {}
+  private cache = Cache.getInstance();
 
   addCommands(program: Command) {
     const findCmd = program.command("find").description("Find things");

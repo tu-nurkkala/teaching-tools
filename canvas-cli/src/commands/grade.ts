@@ -4,10 +4,11 @@ import { table } from "table";
 import _ from "lodash";
 import inquirer from "inquirer";
 import CanvasApi from "../api/api";
-import CacheDb from "../CacheDb";
+import Cache from "../Cache";
 import {
   fatal,
   formatGradeChoices,
+  formatStudentName,
   GradingScale,
   showSeparator,
 } from "../util/formatting";
@@ -16,8 +17,10 @@ import { debugCli } from "../debug";
 import prettyBytes from "pretty-bytes";
 import { Student } from "../entities/Student";
 import { submissionDir, submissionPath } from "../util/fileSystem";
+import { FileInfo } from "../entities/Assignment";
 
 type GradingSchemes = "points" | "passfail" | "letter";
+type GradingFunction = (max: number) => Promise<number>;
 
 interface GradeCommandOptions {
   editor: boolean;
@@ -26,7 +29,8 @@ interface GradeCommandOptions {
 }
 
 export class GradeCommands {
-  constructor(private api: CanvasApi, private cache: CacheDb) {}
+  constructor(private api: CanvasApi) {}
+  private cache = Cache.getInstance();
 
   addCommands(topLevelCommand: Command) {
     topLevelCommand
@@ -72,7 +76,7 @@ export class GradeCommands {
       }
     }
 
-    let gradingFunction;
+    let gradingFunction: GradingFunction;
     switch (options.scheme) {
       case "points":
         gradingFunction = this.gradePoints;
@@ -102,12 +106,7 @@ export class GradeCommands {
       await this.confirmScore(student, score, maxScore);
     } else {
       // Grade multiple students.
-      const allStudents: Student[] = [];
-      for (const [id, student] of Object.entries(
-        this.cache.get("course.students").value()
-      )) {
-        allStudents.push(student);
-      }
+      const allStudents = this.cache.getStudents();
       const gradedStudents: Student[] = [];
       let remainingStudents: Student[] = [];
       const rows = [[chalk.red("UNGRADED"), chalk.green("GRADED")]];
@@ -129,19 +128,6 @@ export class GradeCommands {
         })
       );
 
-      function formatStudentName(student: Student) {
-        let fileDetails = chalk.red("No files");
-        if (student.files && student.files.length > 0) {
-          fileDetails = chalk.green(`${student.files.length} files`);
-        }
-        return [
-          student.name,
-          `(${student.id})`,
-          chalk.yellow(student.submission.workflow_state),
-          fileDetails,
-        ].join(" ");
-      }
-
       while (_.size(remainingStudents) > 0) {
         showSeparator();
         const answer = await inquirer.prompt([
@@ -161,8 +147,10 @@ export class GradeCommands {
         ]);
         const student = answer.student;
 
-        await this.showViewer(student);
+        await this.showViewer(options, student);
 
+        // @ts-ignore - The grading function _is_ defined above.
+        // Is TS confused by the `switch` statement?
         const score = await gradingFunction(maxScore);
         const confirmed = await this.confirmScore(student, score, maxScore);
         if (confirmed) {
@@ -172,7 +160,9 @@ export class GradeCommands {
           remainingStudents = remainingStudents.filter(
             (s) => s.id !== student.id
           );
-          gradedStudents.push(gradedStudent);
+          if (gradedStudent) {
+            gradedStudents.push(gradedStudent);
+          }
 
           const updatedSubmission = await this.api.getOneSubmission(student.id);
           this.cache.cacheSubmission(updatedSubmission);
@@ -271,12 +261,12 @@ export class GradeCommands {
       return;
     }
 
-    let filePaths = [];
+    let filePaths: string[] = [];
     if (allFiles.length === 1) {
       filePaths = [submissionPath(student, allFiles[0].name)];
     } else {
       while (filePaths.length === 0) {
-        const { files } = await inquirer.prompt([
+        const { files } = await inquirer.prompt<{ files: FileInfo[] }>([
           {
             type: "checkbox",
             message: "Choose files to inspect",
@@ -334,7 +324,7 @@ export class GradeCommands {
 
     if (comment) {
       currentComments.push(comment);
-      this.cache.get("assignment.comments").push(comment).write();
+      this.cache.push("assignment.comments", comment);
     }
 
     const { confirmed } = await inquirer.prompt([

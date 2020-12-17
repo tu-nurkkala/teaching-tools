@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import CanvasApi from "../api/api";
-import CacheDb from "../CacheDb";
+import Cache from "../Cache";
 import { fatal, formatAssignment } from "../util/formatting";
 import inquirer from "inquirer";
 import _ from "lodash";
@@ -9,7 +9,8 @@ import { Term } from "../entities/Term";
 import { Course } from "../entities/Course";
 
 export class SetCommands {
-  constructor(private api: CanvasApi, private cache: CacheDb) {}
+  constructor(private api: CanvasApi) {}
+  private cache = Cache.getInstance();
 
   addCommands(program: Command) {
     const setCmd = program
@@ -97,7 +98,6 @@ export class SetCommands {
             name: answers.term.name,
           })
           .write();
-        return answers.term;
       });
 
     setCmd

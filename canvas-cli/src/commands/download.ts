@@ -1,5 +1,5 @@
 import CanvasApi from "../api/api";
-import CacheDb from "../CacheDb";
+import Cache from "../Cache";
 import { formatSubmissionType, warning } from "../util/formatting";
 import chalk from "chalk";
 import prettyBytes from "pretty-bytes";
@@ -30,8 +30,9 @@ export class DownloadCommands {
     headingStyle: "atx",
   });
   private pipeline = promisify(stream.pipeline);
+  private cache = Cache.getInstance();
 
-  constructor(private api: CanvasApi, private cache: CacheDb) {}
+  constructor(private api: CanvasApi) {}
   addCommands(topLevelCommand: any) {
     topLevelCommand
       .command("download [studentId]")
@@ -174,7 +175,7 @@ export class DownloadCommands {
   cacheOneStudentFile(submission: Submission, name: string, size: number) {
     const entry = { name, size };
     debugCache("Cache %O", entry);
-    this.cache.get(this.dbStudentFilePath(submission)).push(entry).write();
+    this.cache.push(this.dbStudentFilePath(submission), entry);
   }
 
   writeAndCacheOneStudentFile(

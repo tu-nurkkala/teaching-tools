@@ -3,7 +3,7 @@ config();
 
 import chalk from "chalk";
 import { sprintf } from "sprintf-js";
-import CacheDb from "./CacheDb";
+import Cache from "./Cache";
 import { ListCommands } from "./commands/list";
 import CanvasApi from "./api/api";
 import { Assignment } from "./entities/Assignment";
@@ -19,7 +19,7 @@ import { SetCommands } from "./commands/set";
 // Something seems goofed up with importing from the typings file.
 const { Command } = require("commander");
 
-const cache = new CacheDb();
+const cache = Cache.getInstance();
 const api = new CanvasApi(cache);
 
 const program = new Command();
@@ -60,12 +60,12 @@ export default function cli() {
     .alias("status")
     .description("Show current settings");
 
-  new ListCommands(api, cache).addCommands(program);
-  new ShowCommands(api, cache).addCommands(program);
-  new FindCommands(api, cache).addCommands(program);
-  new GradeCommands(api, cache).addCommands(program);
-  new DownloadCommands(api, cache).addCommands(program);
-  new SetCommands(api, cache).addCommands(program);
+  new ListCommands(api).addCommands(program);
+  new ShowCommands(api).addCommands(program);
+  new FindCommands(api).addCommands(program);
+  new GradeCommands(api).addCommands(program);
+  new DownloadCommands(api).addCommands(program);
+  new SetCommands(api).addCommands(program);
 
   program.parse(process.argv);
 }

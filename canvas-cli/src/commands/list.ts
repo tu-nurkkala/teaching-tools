@@ -1,4 +1,4 @@
-import CacheDb from "../CacheDb";
+import Cache from "../Cache";
 import { table } from "table";
 import { values, sortBy } from "lodash";
 import chalk from "chalk";
@@ -8,7 +8,8 @@ import { formatSubmissionTypes } from "../util/formatting";
 import { Command } from "commander";
 
 export class ListCommands {
-  constructor(private api: CanvasApi, private cache: CacheDb) {}
+  constructor(private api: CanvasApi) {}
+  private cache = Cache.getInstance();
 
   addCommands(program: Command) {
     const listCmd = program.command("list").description("List things");

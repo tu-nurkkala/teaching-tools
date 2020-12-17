@@ -3,6 +3,8 @@ import chalk from "chalk";
 import { isoDateTimeToDate } from "./datetime";
 import _ from "lodash";
 import boxen, { BorderStyle } from "boxen";
+import { Student } from "../entities/Student";
+const wrapText = require("wrap-text");  // This module is goofy.
 
 export function formatAssignment(assignment: Assignment) {
   const strings = [
@@ -70,7 +72,6 @@ export function formatGradeChoices(scale: GradingScale, maxPoints: number) {
 }
 
 function makeBox(color: string, prefix: string, message: string) {
-  // @ts-ignore
   const wrappedMessage = wrapText(`${prefix} - ${message}`);
   return boxen(chalk.keyword(color)(wrappedMessage), {
     borderColor: color,
@@ -90,4 +91,17 @@ export function warning(message: string) {
 
 export function showSeparator() {
   console.log(chalk.blue("-".repeat(80)));
+}
+
+export function formatStudentName(student: Student) {
+  let fileDetails = chalk.red("No files");
+  if (student.files && student.files.length > 0) {
+    fileDetails = chalk.green(`${student.files.length} files`);
+  }
+  return [
+    student.name,
+    `(${student.id})`,
+    chalk.yellow(student.submission.workflow_state),
+    fileDetails,
+  ].join(" ");
 }

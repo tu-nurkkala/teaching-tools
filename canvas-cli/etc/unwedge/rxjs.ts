@@ -8,14 +8,14 @@ import _ from "lodash";
 import "reflect-metadata";
 
 import CanvasApi from "../../src/api/api";
-import CacheDb from "../../src/CacheDb";
+import Cache from "../../src/Cache";
 import { plainToClass } from "class-transformer";
 import { APIGroup, Group, GroupCategory } from "../../src/entities/Group";
 import Chance from "chance";
 const chance = new Chance();
 
 const courseId = 65;
-const cache = new CacheDb();
+const cache = Cache.getInstance();
 const api = new CanvasApi(cache);
 
 function tryFork() {
