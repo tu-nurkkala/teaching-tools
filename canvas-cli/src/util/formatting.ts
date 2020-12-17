@@ -41,7 +41,7 @@ export function formatSubmissionTypes(submissionTypes: SubmissionType[]) {
     .join(", ");
 }
 
-export function longestValueLength(objArray: Array<Object>, key: string) {
+export function longestKeyLength(objArray: Array<Object>, key: string) {
   return _(objArray)
     .map(key)
     .map((n) => n.length)
@@ -57,7 +57,7 @@ interface GradingScaleEntry {
 export type GradingScale = Array<GradingScaleEntry>;
 
 export function formatGradeChoices(scale: GradingScale, maxPoints: number) {
-  const longestGradeLen = longestValueLength(scale, "grade");
+  const longestGradeLen = longestKeyLength(scale, "grade");
   return scale.map((sc) => {
     const points = (sc.percent / 100.0) * maxPoints;
     return {

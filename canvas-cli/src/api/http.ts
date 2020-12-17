@@ -1,7 +1,7 @@
 import got, { Options } from "got";
 import parseLinkHeader from "parse-link-header";
 import { program } from "commander";
-import { debugNet } from "../debug";
+import { debugNet } from "../util/debug";
 import chalk from "chalk";
 import ora from "ora";
 

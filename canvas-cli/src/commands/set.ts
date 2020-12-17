@@ -119,10 +119,15 @@ export class SetCommands {
           },
         ]);
 
-        await this.api.getGroupCategories(answers.course.id);
+        const course = answers.course;
+        course.group_categories = _.keyBy(
+          await this.api.getGroupCategories(course.id),
+          (cat) => cat.id
+        );
 
-        // FIXME - Cache the course locally.
+        this.cache.set("course", course).write();
       });
+
     return setCmd;
   }
 }

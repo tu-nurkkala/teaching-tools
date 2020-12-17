@@ -147,10 +147,12 @@ export default class CanvasApi {
     );
   }
 
-  async getAssignments(): Promise<Assignment[]> {
+  async getAssignments() {
     const courseId = this.cache.getCourse().id;
     return _.sortBy(
-      await this.apiClient.paginate.all(`courses/${courseId}/assignments`),
+      await this.apiClient.paginate.all<Assignment>(
+        `courses/${courseId}/assignments`
+      ),
       (a) => a.due_at
     );
   }
@@ -189,7 +191,7 @@ export default class CanvasApi {
       .then((response) => response.body);
   }
 
-  getSubmissions(): Promise<Submission[]> {
+  getSubmissions() {
     const segments = [
       "courses",
       this.cache.getCourse().id,
@@ -198,7 +200,7 @@ export default class CanvasApi {
       "submissions",
     ];
     const searchParamInclude = { "include[]": "user" };
-    return this.apiClient.paginate.all(segments.join("/"), {
+    return this.apiClient.paginate.all<Submission>(segments.join("/"), {
       searchParams: searchParamInclude,
     });
   }

@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import ac from "ansi-colors";
-import { Trace } from "../../src/Trace";
+import { Trace } from "../../src/util/Trace";
 
 function print(msge: string, ...args: any[]) {
   console.log(`${msge}:`, args.join(" "));

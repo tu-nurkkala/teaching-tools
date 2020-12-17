@@ -1,12 +1,13 @@
 import low, { LowdbSync } from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
-import { debugCache } from "./debug";
+import { debugCache } from "./util/debug";
 
 import { Assignment, Submission } from "./entities/Assignment";
 import { Term } from "./entities/Term";
 import { Course } from "./entities/Course";
 import { Student } from "./entities/Student";
 import { PropertyPath } from "lodash";
+import { plainToClass } from "class-transformer";
 
 interface Schema {
   canvas: Canvas;
@@ -62,7 +63,7 @@ export default class Cache {
   }
 
   getTerm(): Term {
-    return this.get("term").value();
+    return plainToClass(Term, this.get("term").value());
   }
 
   getCourse(): Course {

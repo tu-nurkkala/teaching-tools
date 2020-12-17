@@ -13,7 +13,7 @@ import {
   showSeparator,
 } from "../util/formatting";
 import childProcess from "child_process";
-import { debugCli } from "../debug";
+import { debugCli } from "../util/debug";
 import prettyBytes from "pretty-bytes";
 import { Student } from "../entities/Student";
 import { submissionDir, submissionPath } from "../util/fileSystem";

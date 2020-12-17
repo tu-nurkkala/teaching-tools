@@ -15,6 +15,8 @@ import { FindCommands } from "./commands/find";
 import { GradeCommands } from "./commands/grade";
 import { DownloadCommands } from "./commands/download";
 import { SetCommands } from "./commands/set";
+import { longestKeyLength } from "./util/formatting";
+import _ from "lodash";
 
 // Something seems goofed up with importing from the typings file.
 const { Command } = require("commander");
@@ -34,22 +36,21 @@ prettyError.appendStyle({
   },
 });
 
-function showElement(typeName: string, value: number) {
-  const segments = [
-    chalk.blue(sprintf("%10s", typeName)),
-    chalk.green(`(${value})`),
-  ];
-  console.log(segments.join(" "));
-}
-
 function showCurrentState() {
-  console.log("FIX ME");
-  return;
-  const assignment = cache.getAssignment();
-  showElement("Term", cache.getTerm().id);
-  showElement("Course", cache.getCourse().id);
-  showElement("Assignment", assignment.id);
-  console.log(chalk.blue("       URL"), chalk.yellow(assignment.html_url));
+  const details = [
+    { name: "Term", value: cache.getTerm() },
+    { name: "Course", value: cache.getCourse() },
+    { name: "Assignment", value: cache.getAssignment() },
+  ];
+  const longestLength = longestKeyLength(details, "name");
+
+  for (const detail of details) {
+    const segments = [
+      chalk.blue(_.padStart(detail.name, longestLength)),
+      chalk.green(detail.value ? detail.value.toString() : "[Unknown]"),
+    ];
+    console.log(segments.join(" "));
+  }
 }
 
 export default function cli() {

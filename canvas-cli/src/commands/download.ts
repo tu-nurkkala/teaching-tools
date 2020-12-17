@@ -6,7 +6,7 @@ import prettyBytes from "pretty-bytes";
 import TurndownService from "turndown";
 import { promisify } from "util";
 import stream from "stream";
-import { debugCache, debugDownload, debugExtract } from "../debug";
+import { debugCache, debugDownload, debugExtract } from "../util/debug";
 import got from "got";
 import { createWriteStream, writeFileSync } from "fs";
 import { submissionPath } from "../util/fileSystem";

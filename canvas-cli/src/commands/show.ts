@@ -11,7 +11,7 @@ import {
   submissionCourseDir,
   submissionStudentDir,
 } from "../util/fileSystem";
-import { longestValueLength } from "../util/formatting";
+import { longestKeyLength } from "../util/formatting";
 
 export class ShowCommands {
   constructor(private api: CanvasApi) {}
@@ -62,7 +62,7 @@ export class ShowCommands {
           });
         }
 
-        const maxLen = longestValueLength(entries, "name");
+        const maxLen = longestKeyLength(entries, "name");
 
         const rows = entries.map((e) => [
           chalk.blue(_.padStart(e.name, maxLen)),
