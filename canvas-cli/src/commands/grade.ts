@@ -3,8 +3,6 @@ import chalk from "chalk";
 import { table } from "table";
 import _ from "lodash";
 import inquirer from "inquirer";
-import CanvasApi from "../api/api";
-import Cache from "../Cache";
 import {
   fatal,
   formatGradeChoices,
@@ -16,8 +14,11 @@ import childProcess from "child_process";
 import { debugCli } from "../util/debug";
 import prettyBytes from "pretty-bytes";
 import { Student } from "../entities/Student";
-import { submissionDir, submissionPath } from "../util/fileSystem";
 import { FileInfo } from "../entities/Assignment";
+import { ApiService } from "../services/ApiService";
+import { CacheService } from "../services/CacheService";
+import { FileSystemService } from "../services/FileSystemService";
+import { Service } from "typedi";
 
 type GradingSchemes = "points" | "passfail" | "letter";
 type GradingFunction = (max: number) => Promise<number>;
@@ -28,9 +29,13 @@ interface GradeCommandOptions {
   scheme: GradingSchemes;
 }
 
+@Service()
 export class GradeCommands {
-  constructor(private api: CanvasApi) {}
-  private cache = Cache.getInstance();
+  constructor(
+    private api: ApiService,
+    private cache: CacheService,
+    private fs: FileSystemService
+  ) {}
 
   addCommands(topLevelCommand: Command) {
     topLevelCommand
@@ -247,7 +252,7 @@ export class GradeCommands {
   showEditor(student: Student) {
     const result = childProcess.spawnSync(
       "code",
-      ["--wait", submissionDir(student)],
+      ["--wait", this.fs.submissionDir(student)],
       { stdio: "ignore" }
     );
     debugCli("Editor result %O", result);
@@ -263,7 +268,7 @@ export class GradeCommands {
 
     let filePaths: string[] = [];
     if (allFiles.length === 1) {
-      filePaths = [submissionPath(student, allFiles[0].name)];
+      filePaths = [this.fs.submissionPath(student, allFiles[0].name)];
     } else {
       while (filePaths.length === 0) {
         const { files } = await inquirer.prompt<{ files: FileInfo[] }>([
@@ -283,7 +288,7 @@ export class GradeCommands {
           console.log(chalk.yellow("Select at least one file"));
         } else {
           console.log(chalk.green(`Selected ${files.length} files`));
-          filePaths = files.map((f) => submissionPath(student, f.name));
+          filePaths = files.map((f) => this.fs.submissionPath(student, f.name));
         }
       }
     }

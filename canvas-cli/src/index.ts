@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import "reflect-metadata";
+import { Container } from "typedi";
+import CLI from "./CLI";
 
-import cli from "./cli";
-cli();
+const cli = Container.get(CLI);
+cli.run();

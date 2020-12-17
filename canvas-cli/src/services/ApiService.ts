@@ -1,6 +1,4 @@
-import { Got } from "got";
 import _ from "lodash";
-import Cache from "../Cache";
 import queryString from "qs";
 import { Term } from "../entities/Term";
 import { plainToClass } from "class-transformer";
@@ -14,18 +12,22 @@ import {
   GroupCategory,
   GroupMember,
 } from "../entities/Group";
-import { Promise } from "bluebird";
 import {
   Assignment,
   Submission,
   SubmissionSummary,
 } from "../entities/Assignment";
-import getClient from "./http";
+import { Service } from "typedi";
+import { HttpService } from "./HttpService";
+import { CacheService } from "./CacheService";
+import { Got } from "got";
 
-export default class CanvasApi {
+@Service()
+export class ApiService {
   private apiClient: Got;
-  constructor(private cache: Cache) {
-    this.apiClient = getClient();
+
+  constructor(private httpService: HttpService, private cache: CacheService) {
+    this.apiClient = httpService.client();
   }
 
   private submissionUrl(userId: number) {

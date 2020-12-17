@@ -3,19 +3,19 @@ import chalk from "chalk";
 import _ from "lodash";
 import { table } from "table";
 import dir from "node-dir";
-import CanvasApi from "../api/api";
-import Cache from "../Cache";
-import {
-  submissionAssignmentDir,
-  submissionBaseDir,
-  submissionCourseDir,
-  submissionStudentDir,
-} from "../util/fileSystem";
 import { longestKeyLength } from "../util/formatting";
+import { ApiService } from "../services/ApiService";
+import { CacheService } from "../services/CacheService";
+import { FileSystemService } from "../services/FileSystemService";
+import { Service } from "typedi";
 
+@Service()
 export class ShowCommands {
-  constructor(private api: CanvasApi) {}
-  private cache = Cache.getInstance();
+  constructor(
+    private api: ApiService,
+    private cache: CacheService,
+    private fs: FileSystemService
+  ) {}
 
   addCommands(program: Command) {
     const showCmd = program.command("show").description("Show things");
@@ -49,16 +49,16 @@ export class ShowCommands {
       .description("Show paths to downloaded files")
       .action((studentId: number) => {
         const entries = [
-          { name: "Base", path: submissionBaseDir() },
-          { name: "Course", path: submissionCourseDir() },
-          { name: "Assignment", path: submissionAssignmentDir() },
+          { name: "Base", path: this.fs.submissionBaseDir() },
+          { name: "Course", path: this.fs.submissionCourseDir() },
+          { name: "Assignment", path: this.fs.submissionAssignmentDir() },
         ];
 
         if (studentId) {
           const student = this.cache.getStudent(studentId);
           entries.push({
             name: "Student",
-            path: submissionStudentDir(student),
+            path: this.fs.submissionStudentDir(student),
           });
         }
 
@@ -76,7 +76,9 @@ export class ShowCommands {
       .command("tree <studentId>")
       .description("Show tree view of downloaded files")
       .action((studentId: number) => {
-        const baseDir = submissionStudentDir(this.cache.getStudent(studentId));
+        const baseDir = this.fs.submissionStudentDir(
+          this.cache.getStudent(studentId)
+        );
         dir.files(baseDir, (err, files) => {
           if (err) throw err;
           files.forEach((f) => console.log(f));

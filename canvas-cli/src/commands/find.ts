@@ -2,12 +2,13 @@ import Fuse from "fuse.js";
 import { Student } from "../entities/Student";
 import { table } from "table";
 import { Command } from "commander";
-import CanvasApi from "../api/api";
-import Cache from "../Cache";
+import { ApiService } from "../services/ApiService";
+import { CacheService } from "../services/CacheService";
+import { Service } from "typedi";
 
+@Service()
 export class FindCommands {
-  constructor(private api: CanvasApi) {}
-  private cache = Cache.getInstance();
+  constructor(private api: ApiService, private cache: CacheService) {}
 
   addCommands(program: Command) {
     const findCmd = program.command("find").description("Find things");

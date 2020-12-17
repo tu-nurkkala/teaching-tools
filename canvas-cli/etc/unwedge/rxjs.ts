@@ -7,15 +7,15 @@ import { delay, map, mergeAll, mergeMap, tap } from "rxjs/operators";
 import _ from "lodash";
 import "reflect-metadata";
 
-import CanvasApi from "../../src/api/api";
-import Cache from "../../src/Cache";
+import CanvasApi from "../../src/services/ApiService";
+import CacheService from "../../src/services/CacheService";
 import { plainToClass } from "class-transformer";
 import { APIGroup, Group, GroupCategory } from "../../src/entities/Group";
 import Chance from "chance";
 const chance = new Chance();
 
 const courseId = 65;
-const cache = Cache.getInstance();
+const cache = CacheService.getInstance();
 const api = new CanvasApi(cache);
 
 function tryFork() {

@@ -1,15 +1,16 @@
-import Cache from "../Cache";
 import { table } from "table";
 import { values, sortBy } from "lodash";
 import chalk from "chalk";
-import CanvasApi from "../api/api";
 import { isoDateTimeToDate } from "../util/datetime";
 import { formatSubmissionTypes } from "../util/formatting";
 import { Command } from "commander";
+import { CacheService } from "../services/CacheService";
+import { ApiService } from "../services/ApiService";
+import { Service } from "typedi";
 
+@Service()
 export class ListCommands {
-  constructor(private api: CanvasApi) {}
-  private cache = Cache.getInstance();
+  constructor(private api: ApiService, private cache: CacheService) {}
 
   addCommands(program: Command) {
     const listCmd = program.command("list").description("List things");

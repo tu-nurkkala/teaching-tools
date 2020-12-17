@@ -1,5 +1,3 @@
-import CanvasApi from "../api/api";
-import Cache from "../Cache";
 import { formatSubmissionType, warning } from "../util/formatting";
 import chalk from "chalk";
 import prettyBytes from "pretty-bytes";
@@ -9,12 +7,15 @@ import stream from "stream";
 import { debugCache, debugDownload, debugExtract } from "../util/debug";
 import got from "got";
 import { createWriteStream, writeFileSync } from "fs";
-import { submissionPath } from "../util/fileSystem";
 import extractZip from "extract-zip";
 import { dirname } from "path";
 import tar from "tar";
 import { ExtractHelper } from "../util/ExtractHelper";
 import { Attachment, Submission } from "../entities/Assignment";
+import { ApiService } from "../services/ApiService";
+import { CacheService } from "../services/CacheService";
+import { FileSystemService } from "../services/FileSystemService";
+import { Service } from "typedi";
 
 interface DownloadCommandOptions {
   showDetails: boolean;
@@ -25,14 +26,19 @@ function parseIntOption(value: string, previous?: number) {
   return parseInt(value);
 }
 
+@Service()
 export class DownloadCommands {
+  constructor(
+    private api: ApiService,
+    private cache: CacheService,
+    private fs: FileSystemService
+  ) {}
+
   private turndownService = new TurndownService({
     headingStyle: "atx",
   });
   private pipeline = promisify(stream.pipeline);
-  private cache = Cache.getInstance();
 
-  constructor(private api: CanvasApi) {}
   addCommands(topLevelCommand: any) {
     topLevelCommand
       .command("download [studentId]")
@@ -183,7 +189,7 @@ export class DownloadCommands {
     name: string,
     content: string
   ) {
-    writeFileSync(submissionPath(submission.user, name), content);
+    writeFileSync(this.fs.submissionPath(submission.user, name), content);
     this.cacheOneStudentFile(submission, name, content.length);
   }
 
@@ -191,7 +197,10 @@ export class DownloadCommands {
     submission: Submission,
     attachment: Attachment
   ) {
-    const absPath = submissionPath(submission.user, attachment.display_name);
+    const absPath = this.fs.submissionPath(
+      submission.user,
+      attachment.display_name
+    );
     const contentType = attachment["content-type"];
 
     try {

@@ -1,46 +1,38 @@
 import low, { LowdbSync } from "lowdb";
 import FileSync from "lowdb/adapters/FileSync";
-import { debugCache } from "./util/debug";
-
-import { Assignment, Submission } from "./entities/Assignment";
-import { Term } from "./entities/Term";
-import { Course } from "./entities/Course";
-import { Student } from "./entities/Student";
-import { PropertyPath } from "lodash";
+import { debugCache } from "../util/debug";
+import { Assignment, Submission } from "../entities/Assignment";
+import { Term } from "../entities/Term";
+import { Course } from "../entities/Course";
+import { Student } from "../entities/Student";
 import { plainToClass } from "class-transformer";
+import { Service } from "typedi";
 
-interface Schema {
+interface CacheSchema {
   canvas: Canvas;
-  term: Term;
-  course: Course;
-  assignment: Assignment;
+  term?: Term;
+  course?: Course;
+  assignment?: Assignment;
 }
 
 interface Canvas {
   account_id: number;
 }
 
-export default class Cache {
-  // This is a singleton class.
-  private static instance: Cache;
-  private _cache: LowdbSync<Schema>;
+const FILE_PATH = "db.json";
 
-  private constructor(filePath = "db.json") {
-    const adapter = new FileSync<Schema>(filePath);
+@Service()
+export class CacheService {
+  private _cache: LowdbSync<CacheSchema>;
+
+  constructor() {
+    const adapter = new FileSync<CacheSchema>(FILE_PATH);
     this._cache = low(adapter);
-
     this._cache
-      .defaults({
+      .defaults<CacheSchema>({
         canvas: { account_id: 1 },
       })
       .write();
-  }
-
-  static getInstance() {
-    if (!Cache.instance) {
-      Cache.instance = new Cache();
-    }
-    return Cache.instance;
   }
 
   get(path: any) {
@@ -48,18 +40,20 @@ export default class Cache {
     if (!this._cache.has(path)) {
       throw `No cached value for '${path}'`;
     }
-    return this._cache.get(path);
+    const rtn = this._cache.get(path);
+    debugCache("got %s", JSON.stringify(rtn));
+    return rtn;
   }
 
   set(path: any, value: any) {
-    debugCache("set %s", path);
+    debugCache("set %s to %s", path, JSON.stringify(value));
     return this._cache.set(path, value);
   }
 
   push(path: string, value: any) {
-    const arr = this._cache.get(path).value();
+    const arr = this.get(path).value();
     arr.push(value);
-    return this._cache.set(path, arr).write();
+    return this.set(path, arr).write();
   }
 
   getTerm(): Term {

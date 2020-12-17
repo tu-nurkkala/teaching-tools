@@ -1,16 +1,17 @@
 import { Command } from "commander";
-import CanvasApi from "../api/api";
-import Cache from "../Cache";
 import { fatal, formatAssignment } from "../util/formatting";
 import inquirer from "inquirer";
 import _ from "lodash";
 import chalk from "chalk";
 import { Term } from "../entities/Term";
 import { Course } from "../entities/Course";
+import { ApiService } from "../services/ApiService";
+import { CacheService } from "../services/CacheService";
+import { Service } from "typedi";
 
+@Service()
 export class SetCommands {
-  constructor(private api: CanvasApi) {}
-  private cache = Cache.getInstance();
+  constructor(private api: ApiService, private cache: CacheService) {}
 
   addCommands(program: Command) {
     const setCmd = program
