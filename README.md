@@ -1,4 +1,4 @@
-# taylor-tools
+# Teaching Tools
 
 Teaching and related tools
 
