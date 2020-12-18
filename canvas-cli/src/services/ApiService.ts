@@ -69,6 +69,20 @@ export class ApiService {
     );
   }
 
+  async getDetailsForCourse(course: Course) {
+    course.groupCategories = _.keyBy(
+      await this.getGroupCategories(course.id),
+      (cat) => cat.id
+    );
+    course.assignmentGroups = _.keyBy(
+      await this.getAssignmentGroups(course.id),
+      (ag) => ag.id
+    );
+    course.students = _.keyBy(await this.getStudents(course.id), (s) => s.id);
+
+    return plainToClass(Course, course, { excludeExtraneousValues: true });
+  }
+
   getAssignmentGroups(courseId: number) {
     return this.apiClient.paginate.all<APIAssignmentGroup>(
       `courses/${courseId}/assignment_groups`

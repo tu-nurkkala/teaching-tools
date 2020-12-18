@@ -1,6 +1,6 @@
 import { Expose, Transform } from "class-transformer";
 import { DateTime } from "luxon";
-import ac from "ansi-colors";
+import chalk from "chalk";
 
 const asDateTime = (value: string) => DateTime.fromISO(value);
 const epoch = DateTime.fromSeconds(0);
@@ -25,9 +25,9 @@ export class Term {
 
   toString() {
     return [
-      ac.green(this.name),
-      ac.blue(this.start_at.toISODate()),
-      ac.yellow(`(${this.id})`),
+      chalk.green(this.name),
+      chalk.blue(this.start_at.toISODate()),
+      chalk.yellow(`(${this.id})`),
     ].join(" ");
   }
 }

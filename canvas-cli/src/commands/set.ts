@@ -120,13 +120,8 @@ export class SetCommands {
           },
         ]);
 
-        const course = answers.course;
-        course.group_categories = _.keyBy(
-          await this.api.getGroupCategories(course.id),
-          (cat) => cat.id
-        );
-
-        this.cache.set("course", course).write();
+        const fullCourse = await this.api.getDetailsForCourse(answers.course);
+        this.cache.set("course", fullCourse).write();
       });
 
     return setCmd;

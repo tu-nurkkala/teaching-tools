@@ -12,11 +12,11 @@
     "build": "tsc",
     "build:watch": "tsc --watch",
     "cli:dist": "node ./dist/src/index.js",
-    "cli": "DEBUG=cli:cache ts-node ./src/index.ts --chatty-api"
+    "cli": "ts-node ./src/index.ts",
+    "cli:debug": "DEBUG=cli:cache ts-node ./src/index.ts --chatty-api"
   },
   "dependencies": {
     "@types/node-emoji": "^1.8.1",
-    "ansi-colors": "^4.1.1",
     "boxen": "^4.2.0",
     "chalk": "^4.1.0",
     "class-transformer": "^0.3.1",

@@ -61,11 +61,11 @@ export class CacheService {
   }
 
   getCourse(): Course {
-    return this.get("course").value();
+    return plainToClass(Course, this.get("course").value());
   }
 
   getAssignment(): Assignment {
-    return this.get("assignment").value();
+    return plainToClass(Assignment, this.get("assignment").value());
   }
 
   getStudents(): Student[] {

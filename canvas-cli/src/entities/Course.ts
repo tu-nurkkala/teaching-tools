@@ -1,13 +1,7 @@
-// export interface Course extends AbstractResource {
-//   course_code: string;
-//   assignment_groups: Dictionary<AssignmentGroup>;
-//   students: Dictionary<Student>;
-//   group_categories: Dictionary<GroupCategory>;
-// }
-
 import { Expose, Type } from "class-transformer";
 import { Student } from "./Student";
 import { GroupCategory } from "./Group";
+import chalk from "chalk";
 
 export interface Dictionary<T> {
   [key: string]: T;
@@ -23,14 +17,18 @@ export class Course {
   @Expose() name: string = "";
   @Expose() course_code: string = "";
 
-  @Expose()
-  assignment_groups: Dictionary<AssignmentGroup> = {};
+  @Expose({ name: "assignment_groups" })
+  assignmentGroups: Dictionary<AssignmentGroup> = {};
 
   @Expose()
   students: Dictionary<Student> = {};
 
-  @Expose()
-  group_categories: Dictionary<GroupCategory> = {};
+  @Expose({ name: "group_categories" })
+  groupCategories: Dictionary<GroupCategory> = {};
+
+  toString() {
+    return [chalk.green(this.name), chalk.yellow(`(${this.id})`)].join(" ");
+  }
 }
 
 export interface APICourse {

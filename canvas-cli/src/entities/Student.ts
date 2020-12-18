@@ -1,18 +1,3 @@
-// export interface Student extends AbstractResource {
-//     created_at: string;
-//     sortable_name: string;
-//     short_name: string;
-//     submission: {
-//         id: number;
-//         grade: string;
-//         score: number;
-//         grader_id: number;
-//         graded_at: number;
-//         workflow_state: string;
-//     };
-//     files: FileInfo[];
-// }
-
 import { Expose } from "class-transformer";
 import { FileInfo, Submission } from "./Assignment";
 
@@ -20,8 +5,8 @@ export class Student {
   @Expose() id: number = 0;
   @Expose() name: string = "";
   @Expose() created_at: string = "";
-  @Expose() sortable_name: string = "";
-  @Expose() short_name: string = "";
+  @Expose({ name: "sortable_name" }) sortableName: string = "";
+  @Expose({ name: "short_name" }) shortName: string = "";
   files: FileInfo[] = [];
   submission!: Submission;
 }
@@ -30,6 +15,8 @@ export interface APIStudent {
   id: number;
   name: string;
   created_at: string;
-  sortable_name: string;
-  short_name: string;
+  sortableName: string;
+  shortName: string;
+  files: FileInfo[];
+  submission: Submission;
 }

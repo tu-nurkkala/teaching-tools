@@ -2,7 +2,7 @@
 // https://github.com/aiteq/trace
 // https://gist.github.com/sothmann/915b13fdce147e6e1a1e
 
-import ac from "ansi-colors";
+import chalk from "chalk";
 import emoji from "node-emoji";
 import { inspect } from "util";
 
@@ -21,7 +21,7 @@ export function Trace(options: TraceOptions = {}) {
     const traceDepth = options.depth || 1;
 
     const fullMethodName = `${target.constructor.name}.${propertyKey}`;
-    console.log(ac.red(`TRACE ${fullMethodName}`));
+    console.log(chalk.red(`TRACE ${fullMethodName}`));
 
     if (!descriptor) {
       console.error(
@@ -34,13 +34,13 @@ export function Trace(options: TraceOptions = {}) {
       const prettyArgs = args.map((arg) => JSON.stringify(arg)).join(", ");
       const prettyCall = `${callEmoji}${fullMethodName}(${prettyArgs})${callEmoji}`;
       console.group();
-      console.log(ac.yellow(prettyCall));
+      console.log(chalk.yellow(prettyCall));
     }
 
     function debugReturn(rtn: any) {
       const prettyValue = inspect(rtn, { depth: traceDepth });
       const prettyRtn = `${rtnEmoji}${fullMethodName}${rtnEmoji}${prettyValue}`;
-      console.log(ac.yellow(prettyRtn));
+      console.log(chalk.yellow(prettyRtn));
       console.groupEnd();
     }
 

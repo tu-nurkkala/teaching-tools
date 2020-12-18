@@ -38,7 +38,7 @@ export class FileSystemService {
   submissionStudentDir(student: Student) {
     return join(
       this.submissionAssignmentDir(),
-      this.sanitizePathSegment(student.sortable_name)
+      this.sanitizePathSegment(student.sortableName)
     );
   }
 

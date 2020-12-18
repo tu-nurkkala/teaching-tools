@@ -1,6 +1,5 @@
-import { APIStudent, Student } from "./Student";
-import { Term } from "./Term";
-import { Course } from "./Course";
+import { Student } from "./Student";
+import chalk from "chalk";
 
 export interface Submission {
   id: number;
@@ -42,15 +41,19 @@ export type SubmissionType =
   | "online_text_entry"
   | "online_url";
 
-export interface Assignment {
-  id: number;
-  name: string;
-  due_at: string;
-  html_url: string;
-  needs_grading_count: number;
-  submission_types: SubmissionType[];
-  points_possible: number;
-  submission_summary: SubmissionSummary;
-  assignment_group_id: number;
-  comments: string[];
+export class Assignment {
+  id: number = 0;
+  name: string = "";
+  due_at: string = "";
+  html_url: string = "";
+  needs_grading_count: number = 0;
+  submission_types: SubmissionType[] = [];
+  points_possible: number = 0;
+  submission_summary!: SubmissionSummary;
+  assignment_group_id: number = 0;
+  comments: string[] = [];
+
+  toString() {
+    return [chalk.green(this.name), chalk.yellow(`(${this.id})`)].join(" ");
+  }
 }

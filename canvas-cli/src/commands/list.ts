@@ -52,7 +52,7 @@ export class ListCommands {
 
   listStudents() {
     const students = sortBy(this.cache.getStudents(), (s) =>
-      s.sortable_name.toLowerCase()
+      s.sortableName.toLowerCase()
     );
     const rows = students.map((s) => [s.id, s.name]);
     console.log(table(rows, { singleLine: true }));
