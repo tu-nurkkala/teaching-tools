@@ -59,7 +59,9 @@ export default class CLI {
   run() {
     const program = new Command();
     program.version(version);
-    program.option("--chatty-api", "Show API actions");
+    program.option("--chatty-api", "Show API actions", () =>
+      this.httpService.makeChatty()
+    );
 
     program
       .command("current")

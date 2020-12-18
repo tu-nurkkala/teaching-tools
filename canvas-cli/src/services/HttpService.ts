@@ -1,4 +1,4 @@
-import got, { Got, Options } from "got";
+import got, { Options } from "got";
 import parseLinkHeader from "parse-link-header";
 import { debugNet } from "../util/debug";
 import chalk from "chalk";
@@ -11,8 +11,8 @@ const apiSpinner = ora();
 export class HttpService {
   private chatty = false;
 
-  setChattiness(value: boolean) {
-    this.chatty = value;
+  makeChatty() {
+    this.chatty = true;
   }
 
   client() {
