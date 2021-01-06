@@ -18,8 +18,8 @@ import {
   SubmissionSummary,
 } from "../entities/Assignment";
 import { Service } from "typedi";
-import { HttpService } from "./HttpService";
-import { CacheService } from "./CacheService";
+import { CacheService } from "./cache.service";
+import { HttpService } from "./http.service";
 import { Got } from "got";
 
 @Service()
@@ -42,7 +42,7 @@ export class ApiService {
   }
 
   // Get enrollment terms in reverse chronological order.
-  async getTerms() {
+  async getTerms(): Promise<Term[]> {
     const accountId = this.cache.get("canvas.account_id").value();
     const response = await this.apiClient.get<{ enrollment_terms: Term[] }>(
       `accounts/${accountId}/terms`
@@ -55,21 +55,21 @@ export class ApiService {
     return terms.sort((a, b) => b.start_at.toMillis() - a.start_at.toMillis());
   }
 
-  apiGetCourses(termId: number) {
+  apiGetCourses(): Promise<APICourse[]> {
     return this.apiClient
       .get<APICourse[]>(`courses`, { searchParams: { include: "term" } })
       .then((response) => response.body);
   }
 
-  getCourses(termId: number) {
-    return this.apiGetCourses(termId).then((courses) =>
+  getCourses(termId: number): Promise<Course[]> {
+    return this.apiGetCourses().then((courses) =>
       courses
         .filter((c) => c.term.id === termId)
         .map((c) => plainToClass(Course, c, { excludeExtraneousValues: true }))
     );
   }
 
-  async getDetailsForCourse(course: Course) {
+  async getDetailsForCourse(course: Course): Promise<Course> {
     course.groupCategories = _.keyBy(
       await this.getGroupCategories(course.id),
       (cat) => cat.id
@@ -83,20 +83,20 @@ export class ApiService {
     return plainToClass(Course, course, { excludeExtraneousValues: true });
   }
 
-  getAssignmentGroups(courseId: number) {
+  getAssignmentGroups(courseId: number): Promise<APIAssignmentGroup[]> {
     return this.apiClient.paginate.all<APIAssignmentGroup>(
       `courses/${courseId}/assignment_groups`
     );
   }
 
-  getStudents(courseId: number) {
+  getStudents(courseId: number): Promise<APIStudent[]> {
     return this.apiClient.paginate.all<APIStudent>(
       `courses/${courseId}/students`
     );
   }
 
   // @Trace()
-  apiGetGroupCategories(courseId: number) {
+  apiGetGroupCategories(courseId: number): Promise<APIGroupCategory[]> {
     return this.apiClient
       .get<APIGroupCategory[]>(`courses/${courseId}/group_categories`)
       .then((response) => response.body);
@@ -109,21 +109,21 @@ export class ApiService {
   }
 
   // @Trace()
-  async apiGetGroups(courseId: number) {
+  async apiGetGroups(courseId: number): Promise<APIGroup[]> {
     const response = await this.apiClient.get<APIGroup[]>(
       `courses/${courseId}/groups`
     );
     return response.body;
   }
 
-  async apiGetGroupMembers(groupId: number) {
+  async apiGetGroupMembers(groupId: number): Promise<APIGroupMember[]> {
     const response = await this.apiClient.get<APIGroupMember[]>(
       `groups/${groupId}/users`
     );
     return response.body;
   }
 
-  async apiGetGroupsWithMembers(courseId: number) {
+  async apiGetGroupsWithMembers(courseId: number): Promise<APIGroup[]> {
     const apiGroups = await this.apiGetGroups(courseId);
     for (const apiGroup of apiGroups) {
       apiGroup.members = await this.apiGetGroupMembers(apiGroup.id);
@@ -131,7 +131,7 @@ export class ApiService {
     return apiGroups;
   }
 
-  async getGroupCategories(courseId: number) {
+  async getGroupCategories(courseId: number): Promise<GroupCategory[]> {
     const apiGroupCategories = await this.apiGetGroupCategories(courseId);
     const apiGroups = await this.apiGetGroupsWithMembers(courseId);
 
@@ -146,14 +146,14 @@ export class ApiService {
     );
   }
 
-  async getGroups(courseId: number) {
+  async getGroups(courseId: number): Promise<Group[]> {
     const groupsWithMembers = await this.apiGetGroupsWithMembers(courseId);
-    groupsWithMembers.map((grp) =>
+    return groupsWithMembers.map((grp) =>
       plainToClass(Group, grp, { excludeExtraneousValues: true })
     );
   }
 
-  getGroupMembers(groupId: number) {
+  getGroupMembers(groupId: number): Promise<GroupMember[]> {
     return this.apiGetGroupMembers(groupId).then((groupMembers) =>
       groupMembers.map((groupMember) =>
         plainToClass(GroupMember, groupMember, {
@@ -173,7 +173,7 @@ export class ApiService {
     );
   }
 
-  getSubmissionSummary(assignmentId: number) {
+  getSubmissionSummary(assignmentId: number): Promise<SubmissionSummary> {
     const courseId = this.cache.getCourse().id;
     return this.apiClient
       .get<SubmissionSummary>(
@@ -182,21 +182,21 @@ export class ApiService {
       .then((response) => response.body);
   }
 
-  getOneStudent(studentId: number) {
+  getOneStudent(studentId: number): Promise<Student> {
     const courseId = this.cache.getCourse().id;
     return this.apiClient
       .get<Student>(`courses/${courseId}/users/${studentId}`)
       .then((response) => response.body);
   }
 
-  getOneAssignment(assignmentId: number) {
+  getOneAssignment(assignmentId: number): Promise<Assignment> {
     const courseId = this.cache.getCourse().id;
     return this.apiClient
       .get<Assignment>(`courses/${courseId}/assignments/${assignmentId}`)
       .then((response) => response.body);
   }
 
-  getOneSubmission(userId: number) {
+  getOneSubmission(userId: number): Promise<Submission> {
     return this.apiClient
       .get<Submission>(this.submissionUrl(userId), {
         searchParams: queryString.stringify(
@@ -207,7 +207,7 @@ export class ApiService {
       .then((response) => response.body);
   }
 
-  getSubmissions() {
+  getSubmissions(): Promise<Submission[]> {
     const segments = [
       "courses",
       this.cache.getCourse().id,
@@ -221,7 +221,11 @@ export class ApiService {
     });
   }
 
-  gradeSubmission(userId: number, score: number, comment: string) {
+  gradeSubmission(
+    userId: number,
+    score: number,
+    comment: string
+  ): Promise<string> {
     const parameters = {
       submission: { posted_grade: score },
       comment: {},

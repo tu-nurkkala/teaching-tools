@@ -1,4 +1,4 @@
-import { Expose, Type } from "class-transformer";
+import { Expose } from "class-transformer";
 import { Student } from "./Student";
 import { GroupCategory } from "./Group";
 import chalk from "chalk";
@@ -8,14 +8,14 @@ export interface Dictionary<T> {
 }
 
 export class AssignmentGroup {
-  @Expose() id: number = 0;
-  @Expose() name: string = "";
+  @Expose() id = 0;
+  @Expose() name = "";
 }
 
 export class Course {
-  @Expose() id: number = 0;
-  @Expose() name: string = "";
-  @Expose() course_code: string = "";
+  @Expose() id = 0;
+  @Expose() name = "";
+  @Expose() course_code = "";
 
   @Expose({ name: "assignment_groups" })
   assignmentGroups: Dictionary<AssignmentGroup> = {};
@@ -26,7 +26,7 @@ export class Course {
   @Expose({ name: "group_categories" })
   groupCategories: Dictionary<GroupCategory> = {};
 
-  toString() {
+  toString(): string {
     return [chalk.green(this.name), chalk.yellow(`(${this.id})`)].join(" ");
   }
 }

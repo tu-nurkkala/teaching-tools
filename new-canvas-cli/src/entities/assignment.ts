@@ -42,18 +42,18 @@ export type SubmissionType =
   | "online_url";
 
 export class Assignment {
-  id: number = 0;
-  name: string = "";
-  due_at: string = "";
-  html_url: string = "";
-  needs_grading_count: number = 0;
+  id = 0;
+  name = "";
+  due_at = "";
+  html_url = "";
+  needs_grading_count = 0;
   submission_types: SubmissionType[] = [];
-  points_possible: number = 0;
+  points_possible = 0;
   submission_summary!: SubmissionSummary;
-  assignment_group_id: number = 0;
+  assignment_group_id = 0;
   comments: string[] = [];
 
-  toString() {
+  toString(): string {
     return [chalk.green(this.name), chalk.yellow(`(${this.id})`)].join(" ");
   }
 }

@@ -1,4 +1,4 @@
-import got, { Options } from "got";
+import got, { Got, Options } from "got";
 import parseLinkHeader from "parse-link-header";
 import { debugNet } from "../util/debug";
 import chalk from "chalk";
@@ -11,19 +11,19 @@ const apiSpinner = ora();
 export class HttpService {
   private chatty = false;
 
-  makeChatty() {
+  makeChatty(): void {
     this.chatty = true;
   }
 
-  client() {
+  client(): Got {
     return got.extend({
-      prefixUrl: process.env["CANVAS_URL"] + "/api/v1",
+      prefixUrl: process.env.CANVAS_URL + "/api/v1",
       headers: {
-        Authorization: `Bearer ${process.env["CANVAS_TOK"]}`,
+        Authorization: `Bearer ${process.env.CANVAS_TOK}`,
       },
       responseType: "json",
       pagination: {
-        paginate: (response, allItems, currentItems) => {
+        paginate: (response) => {
           const previousSearchParams = response.request.options.searchParams;
           let rtn: boolean | Options = false;
           if (response.headers.link) {

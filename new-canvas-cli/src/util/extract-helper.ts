@@ -19,7 +19,7 @@ export class ExtractHelper {
     this.bytes = { extracted: 0, skipped: 0 };
   }
 
-  skipEntry(name: string) {
+  skipEntry(name: string): boolean {
     return (
       name.includes("node_modules/") ||
       name.includes(".git/") ||
@@ -30,7 +30,7 @@ export class ExtractHelper {
     );
   }
 
-  addEntry(name: string, size: number) {
+  addEntry(name: string, size: number): void {
     if (this.skipEntry(name)) {
       this.files.skipped += 1;
       this.bytes.skipped += size;

@@ -2,11 +2,11 @@ import { Expose } from "class-transformer";
 import { FileInfo, Submission } from "./Assignment";
 
 export class Student {
-  @Expose() id: number = 0;
-  @Expose() name: string = "";
-  @Expose() created_at: string = "";
-  @Expose({ name: "sortable_name" }) sortableName: string = "";
-  @Expose({ name: "short_name" }) shortName: string = "";
+  @Expose() id = 0;
+  @Expose() name = "";
+  @Expose() created_at = "";
+  @Expose({ name: "sortable_name" }) sortableName = "";
+  @Expose({ name: "short_name" }) shortName = "";
   files: FileInfo[] = [];
   submission!: Submission;
 }

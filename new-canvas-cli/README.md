@@ -30,6 +30,7 @@ USAGE
 <!-- commands -->
 * [`canvas-cli hello [FILE]`](#canvas-cli-hello-file)
 * [`canvas-cli help [COMMAND]`](#canvas-cli-help-command)
+* [`canvas-cli term [FILE]`](#canvas-cli-term-file)
 
 ## `canvas-cli hello [FILE]`
 
@@ -67,4 +68,20 @@ OPTIONS
 ```
 
 _See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v3.2.1/src/commands/help.ts)_
+
+## `canvas-cli term [FILE]`
+
+describe the command here
+
+```
+USAGE
+  $ canvas-cli term [FILE]
+
+OPTIONS
+  -f, --force
+  -h, --help       show CLI help
+  -n, --name=name  name to print
+```
+
+_See code: [src/commands/term.ts](https://github.com/nurkkala/canvas-cli/blob/v0.0.0/src/commands/term.ts)_
 <!-- commandsstop -->

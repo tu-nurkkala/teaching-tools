@@ -15,18 +15,19 @@
 
 import { Expose, Type } from "class-transformer";
 
-export class GroupCategory {
+export class GroupMember {
   @Expose() id = 0;
+
   @Expose() name = "";
 
-  @Expose()
-  @Type(() => Group)
-  groups: Group[] = [];
+  @Expose({ name: "sortable_name" }) sortableName = "";
 }
 
 export class Group {
   @Expose() id = 0;
+
   @Expose() name = "";
+
   @Expose({ name: "members_count" }) membersCount = 0;
 
   @Expose()
@@ -34,10 +35,14 @@ export class Group {
   members: GroupMember[] = [];
 }
 
-export class GroupMember {
+export class GroupCategory {
   @Expose() id = 0;
+
   @Expose() name = "";
-  @Expose({ name: "sortable_name" }) sortableName = "";
+
+  @Expose()
+  @Type(() => Group)
+  groups: Group[] = [];
 }
 
 export interface APIGroupCategory {

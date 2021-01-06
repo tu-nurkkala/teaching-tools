@@ -6,11 +6,9 @@ const asDateTime = (value: string) => DateTime.fromISO(value);
 const epoch = DateTime.fromSeconds(0);
 
 export class Term {
-  @Expose()
-  id: number = 0;
-
-  @Expose()
-  name: string = "";
+  @Expose() id = 0;
+  @Expose() name = "";
+  @Expose() workflow_state = "";
 
   @Expose()
   @Transform((value) => asDateTime(value))
@@ -20,10 +18,7 @@ export class Term {
   @Transform((value) => asDateTime(value))
   end_at: DateTime = epoch;
 
-  @Expose()
-  workflow_state: string = "";
-
-  toString() {
+  toString(): string {
     return [
       chalk.green(this.name),
       chalk.blue(this.start_at.toISODate()),

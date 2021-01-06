@@ -12,7 +12,7 @@ interface TraceOptions {
 
 export function Trace(options: TraceOptions = {}) {
   return function (
-    target: Object,
+    target: Record<string, any>,
     propertyKey: string,
     descriptor: PropertyDescriptor
   ) {
@@ -27,7 +27,7 @@ export function Trace(options: TraceOptions = {}) {
       console.error(
         "No descriptor; are you calling this on a normal method (in a class; not using =>)?"
       );
-      throw Error("No descriptor");
+      throw new Error("No descriptor");
     }
 
     function debugCall(args: any[]) {

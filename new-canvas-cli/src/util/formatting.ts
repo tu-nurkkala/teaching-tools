@@ -2,11 +2,33 @@ import { Assignment, SubmissionType } from "../entities/Assignment";
 import chalk from "chalk";
 import { isoDateTimeToDate } from "./datetime";
 import _ from "lodash";
-import boxen, { BorderStyle } from "boxen";
+import boxen from "boxen";
 import { Student } from "../entities/Student";
-const wrapText = require("wrap-text");  // This module is goofy.
 
-export function formatAssignment(assignment: Assignment) {
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const wrapText = require("wrap-text"); // This module is goofy.
+
+export function formatSubmissionType(subType: SubmissionType): string {
+  const map = {
+    online_upload: chalk.blue("upload"),
+    online_text_entry: chalk.green("text"),
+    online_quiz: chalk.red("quiz"),
+    online_url: chalk.yellow("url"),
+    none: chalk.gray("[none]"),
+  };
+
+  return map.hasOwnProperty(subType) ? map[subType] : chalk.bgGreen(subType);
+}
+
+export function formatSubmissionTypes(
+  submissionTypes: SubmissionType[]
+): string {
+  return submissionTypes
+    .map((subType) => formatSubmissionType(subType))
+    .join(", ");
+}
+
+export function formatAssignment(assignment: Assignment): string {
   const strings = [
     chalk.gray(isoDateTimeToDate(assignment.due_at)),
     assignment.name,
@@ -23,25 +45,10 @@ export function formatAssignment(assignment: Assignment) {
   return strings.join(" ");
 }
 
-export function formatSubmissionType(subType: SubmissionType) {
-  const map = {
-    online_upload: chalk.blue("upload"),
-    online_text_entry: chalk.green("text"),
-    online_quiz: chalk.red("quiz"),
-    online_url: chalk.yellow("url"),
-    none: chalk.gray("[none]"),
-  };
-
-  return map.hasOwnProperty(subType) ? map[subType] : chalk.bgGreen(subType);
-}
-
-export function formatSubmissionTypes(submissionTypes: SubmissionType[]) {
-  return submissionTypes
-    .map((subType) => formatSubmissionType(subType))
-    .join(", ");
-}
-
-export function longestKeyLength(objArray: Array<Object>, key: string) {
+export function longestKeyLength(
+  objArray: Array<Record<string, any>>,
+  key: string
+): number {
   return _(objArray)
     .map(key)
     .map((n) => n.length)
@@ -75,25 +82,25 @@ function makeBox(color: string, prefix: string, message: string) {
   const wrappedMessage = wrapText(`${prefix} - ${message}`);
   return boxen(chalk.keyword(color)(wrappedMessage), {
     borderColor: color,
-    borderStyle: BorderStyle.Round,
+    borderStyle: "round",
     padding: { top: 0, right: 1, bottom: 0, left: 1 },
   });
 }
 
-export function fatal(message: string) {
+export function fatal(message: string): never {
   console.log(makeBox("red", "ERROR", message));
-  process.exit(1);
+  throw new Error(message);
 }
 
-export function warning(message: string) {
+export function warning(message: string): void {
   console.log(makeBox("yellow", "WARNING", message));
 }
 
-export function showSeparator() {
+export function showSeparator(): void {
   console.log(chalk.blue("-".repeat(80)));
 }
 
-export function formatStudentName(student: Student) {
+export function formatStudentName(student: Student): string {
   let fileDetails = chalk.red("No files");
   if (student.files && student.files.length > 0) {
     fileDetails = chalk.green(`${student.files.length} files`);

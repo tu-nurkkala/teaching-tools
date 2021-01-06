@@ -38,7 +38,7 @@ export class CacheService {
   get(path: any) {
     debugCache("get %s", path);
     if (!this._cache.has(path)) {
-      throw `No cached value for '${path}'`;
+      throw new Error(`No cached value for '${path}'`);
     }
     const rtn = this._cache.get(path);
     debugCache("got %s", JSON.stringify(rtn));
